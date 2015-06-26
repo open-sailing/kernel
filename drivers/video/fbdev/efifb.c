@@ -146,6 +146,8 @@ ATTRIBUTE_GROUPS(efifb);
 
 static bool pci_dev_disabled;	/* FB base matches BAR of a disabled device */
 
+static struct resource *pci_dev_bar_resource;
+
 static int efifb_probe(struct platform_device *dev)
 {
 	struct fb_info *info;
@@ -178,6 +180,20 @@ static int efifb_probe(struct platform_device *dev)
 		return -ENODEV;
 	}
 	printk(KERN_INFO "efifb: probing for efifb\n");
+
+	if (pci_dev_bar_resource) {
+		u64 base = screen_info.lfb_base;
+		u64 size = screen_info.lfb_size;
+
+		if (screen_info.capabilities & VIDEO_CAPABILITY_64BIT_BASE)
+			base |= (u64)screen_info.ext_lfb_base << 32;
+
+		if (pci_dev_bar_resource->start > base ||
+		    pci_dev_bar_resource->end < base + size - 1) {
+			pr_err("efifb: PCI BAR has moved, disabling ...\n");
+			return -ENODEV;
+		}
+	}
 
 	/* just assume they're all unset if any are */
 	if (!screen_info.blue_size) {
@@ -383,12 +399,7 @@ static void claim_efifb_bar(struct pci_dev *dev, int idx)
 		return;
 	}
 
-	if (pci_claim_resource(dev, idx)) {
-		pci_dev_disabled = true;
-		dev_err(&dev->dev,
-			"BAR %d: failed to claim resource for efifb!\n", idx);
-		return;
-	}
+	pci_dev_bar_resource = dev->resource + idx;
 
 	dev_info(&dev->dev, "BAR %d: assigned to efifb\n", idx);
 }
