@@ -108,6 +108,7 @@ static int bfs_get_block(struct inode *inode, sector_t block,
 		map_bh(bh_result, sb, phys);
 		info->si_freeb -= phys - bi->i_eblock;
 		info->si_lf_eblk = bi->i_eblock = phys;
+		inode->i_blocks = block + 1;
 		mark_inode_dirty(inode);
 		err = 0;
 		goto out;
@@ -141,7 +142,8 @@ static int bfs_get_block(struct inode *inode, sector_t block,
 	 * This assumes nothing can write the inode back while we are here
 	 * and thus update inode->i_blocks! (XXX)
 	 */
-	info->si_freeb -= bi->i_eblock - bi->i_sblock + 1 - inode->i_blocks;
+	info->si_freeb -= block + 1 - inode->i_blocks;
+	inode->i_blocks = block + 1;
 	mark_inode_dirty(inode);
 	map_bh(bh_result, sb, phys);
 out:

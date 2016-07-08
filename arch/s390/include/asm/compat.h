@@ -7,11 +7,24 @@
 #include <linux/sched.h>
 #include <linux/thread_info.h>
 
-#define __TYPE_IS_PTR(t) (!__builtin_types_compatible_p(typeof(0?(t)0:0ULL), u64))
-
 #define __SC_DELOUSE(t,v) ({ \
 	BUILD_BUG_ON(sizeof(t) > 4 && !__TYPE_IS_PTR(t)); \
 	(t)(__TYPE_IS_PTR(t) ? ((v) & 0x7fffffff) : (v)); \
+})
+
+#define __SC_COMPAT_CAST(t, a)						\
+({									\
+	long __ReS = a;							\
+									\
+	BUILD_BUG_ON((sizeof(t) > 4) && !__TYPE_IS_L(t) &&		\
+		     !__TYPE_IS_UL(t) && !__TYPE_IS_PTR(t));		\
+	if (__TYPE_IS_L(t))						\
+		__ReS = (s32)a;						\
+	if (__TYPE_IS_UL(t))						\
+		__ReS = (u32)a;						\
+	if (__TYPE_IS_PTR(t))						\
+		__ReS = a & 0x7fffffff;					\
+	(t)__ReS;							\
 })
 
 #define PSW32_MASK_PER		0x40000000UL

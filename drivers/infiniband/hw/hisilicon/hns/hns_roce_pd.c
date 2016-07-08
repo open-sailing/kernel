@@ -1,0 +1,124 @@
+/*
+ * Copyright (c) 2016 Hisilicon Limited.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ */
+
+#include <asm/page.h>
+#include <linux/init.h>
+#include <linux/platform_device.h>
+#include <linux/slab.h>
+#include <rdma/ib_smi.h>
+#include <rdma/ib_umem.h>
+#include <rdma/ib_user_verbs.h>
+#include "hns_roce_common.h"
+#include "hns_roce_device.h"
+
+int hns_roce_pd_alloc(struct hns_roce_dev *hr_dev, u32 *pdn)
+{
+	struct device *dev = &hr_dev->pdev->dev;
+	u32 pd_number;
+	int ret = 0;
+
+	ret = hns_roce_bitmap_alloc(&hr_dev->pd_bitmap, &pd_number);
+	if (ret == -1) {
+		dev_err(dev, "alloc pdn from pdbitmap failed\n");
+		return -ENOMEM;
+	}
+
+	*pdn = pd_number;
+
+	return 0;
+}
+
+void hns_roce_pd_free(struct hns_roce_dev *hr_dev, u32 pdn)
+{
+	hns_roce_bitmap_free(&hr_dev->pd_bitmap, pdn);
+}
+
+int hns_roce_init_pd_table(struct hns_roce_dev *hr_dev)
+{
+	return hns_roce_bitmap_init(&hr_dev->pd_bitmap, hr_dev->caps.num_pds,
+				    hr_dev->caps.num_pds - 1,
+				    hr_dev->caps.reserved_pds, 0);
+}
+
+void hns_roce_cleanup_pd_table(struct hns_roce_dev *hr_dev)
+{
+	hns_roce_bitmap_cleanup(&hr_dev->pd_bitmap);
+}
+
+struct ib_pd *hns_roce_alloc_pd(struct ib_device *ib_dev,
+				struct ib_ucontext *context,
+				struct ib_udata *udata)
+{
+	struct hns_roce_dev *hr_dev = to_hr_dev(ib_dev);
+	struct device *dev = &hr_dev->pdev->dev;
+	struct hns_roce_pd *pd;
+	int ret;
+
+	pd = kmalloc(sizeof(*pd), GFP_KERNEL);
+	if (!pd)
+		return ERR_PTR(-ENOMEM);
+
+	ret = hns_roce_pd_alloc(to_hr_dev(ib_dev), &pd->pdn);
+	if (ret) {
+		kfree(pd);
+		dev_err(dev, "[alloc_pd]hns_roce_pd_alloc failed!\n");
+		return ERR_PTR(ret);
+	}
+
+	if (context) {
+		if (ib_copy_to_udata(udata, &pd->pdn, sizeof(__u32))) {
+			hns_roce_pd_free(to_hr_dev(ib_dev), pd->pdn);
+			dev_err(dev, "[alloc_pd]ib_copy_to_udata failed!\n");
+			kfree(pd);
+			return ERR_PTR(-EFAULT);
+		}
+	}
+
+	return &pd->ibpd;
+}
+
+int hns_roce_dealloc_pd(struct ib_pd *pd)
+{
+	hns_roce_pd_free(to_hr_dev(pd->device), to_hr_pd(pd)->pdn);
+	kfree(to_hr_pd(pd));
+
+	return 0;
+}
+
+int hns_roce_uar_alloc(struct hns_roce_dev *hr_dev, struct hns_roce_uar *uar)
+{
+	int ret = 0;
+	/* Using bitmap to manager UAR index */
+	ret = hns_roce_bitmap_alloc(&hr_dev->uar_table.bitmap, &uar->index);
+	if (ret == -1)
+		return -ENOMEM;
+
+	uar->index = (uar->index - 1) % hr_dev->caps.phy_num_uars + 1;
+	uar->pfn = (ROCE_DEV_IOBASE >> PAGE_SHIFT) + uar->index;
+
+	return 0;
+}
+
+void hns_roce_uar_free(struct hns_roce_dev *hr_dev, struct hns_roce_uar *uar)
+{
+	hns_roce_bitmap_free(&(hr_dev)->uar_table.bitmap, uar->index);
+}
+
+int hns_roce_init_uar_table(struct hns_roce_dev *hr_dev)
+{
+	return hns_roce_bitmap_init(&hr_dev->uar_table.bitmap,
+				    hr_dev->caps.num_uars,
+				    hr_dev->caps.num_uars - 1,
+				    hr_dev->caps.reserved_uars, 0);
+}
+
+void hns_roce_cleanup_uar_table(struct hns_roce_dev *hr_dev)
+{
+	hns_roce_bitmap_cleanup(&hr_dev->uar_table.bitmap);
+}

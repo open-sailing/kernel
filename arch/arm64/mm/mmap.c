@@ -26,6 +26,7 @@
 #include <linux/io.h>
 #include <linux/personality.h>
 #include <linux/random.h>
+#include <linux/memblock.h>
 
 #include <asm/cputype.h>
 
@@ -100,12 +101,22 @@ EXPORT_SYMBOL_GPL(arch_pick_mmap_layout);
  */
 int valid_phys_addr_range(phys_addr_t addr, size_t size)
 {
+	struct memblock_region *r;
+	phys_addr_t addr_end = addr + size;
+
 	if (addr < PHYS_OFFSET)
 		return 0;
-	if (addr + size > __pa(high_memory - 1) + 1)
+
+	if (addr_end > __pa(high_memory - 1) + 1)
 		return 0;
 
-	return 1;
+	/* for normal memory blocks */
+	for_each_memblock(memory, r) {
+		if (addr >= r->base && addr_end <= (r->base + r->size))
+			return 1;
+	}
+
+	return 0;
 }
 
 /*

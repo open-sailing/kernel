@@ -113,6 +113,8 @@ enum bpf_map_type {
 	BPF_MAP_TYPE_UNSPEC,
 	BPF_MAP_TYPE_HASH,
 	BPF_MAP_TYPE_ARRAY,
+	BPF_MAP_TYPE_PROG_ARRAY,
+	BPF_MAP_TYPE_PERF_EVENT_ARRAY,
 };
 
 enum bpf_prog_type {
@@ -210,6 +212,22 @@ enum bpf_func_id {
 	 * Return: 0 on success
 	 */
 	BPF_FUNC_l4_csum_replace,
+
+	/**
+	 * bpf_tail_call(ctx, prog_array_map, index) - jump into another BPF program
+	 * @ctx: context pointer passed to next program
+	 * @prog_array_map: pointer to map which type is BPF_MAP_TYPE_PROG_ARRAY
+	 * @index: index inside array that selects specific program to run
+	 * Return: 0 on success
+	 */
+	BPF_FUNC_tail_call,
+	BPF_FUNC_perf_event_read,	/* u64 bpf_perf_event_read(&map, index) */
+
+	/**
+	 * int bpf_output_trace_data(void *src, int size)
+	 * Return: 0 on success
+	 */
+       BPF_FUNC_output_trace_data,
 	__BPF_FUNC_MAX_ID,
 };
 

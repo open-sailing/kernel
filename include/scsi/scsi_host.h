@@ -581,7 +581,7 @@ struct Scsi_Host {
 	atomic_t host_busy;		   /* commands actually active on low-level */
 	atomic_t host_blocked;
 
-	unsigned int host_failed;	   /* commands that failed.
+	atomic_t host_failed;		   /* commands that failed.
 					      protected by host_lock */
 	unsigned int host_eh_scheduled;    /* EH scheduled without command */
     

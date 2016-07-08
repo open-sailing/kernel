@@ -60,7 +60,8 @@ static int scsi_try_to_abort_cmd(struct scsi_host_template *,
 /* called with shost->host_lock held */
 void scsi_eh_wakeup(struct Scsi_Host *shost)
 {
-	if (atomic_read(&shost->host_busy) == shost->host_failed) {
+	if (atomic_read(&shost->host_busy) ==
+	    atomic_read(&shost->host_failed)) {
 		trace_scsi_eh_wakeup(shost);
 		wake_up_process(shost->ehandler);
 		SCSI_LOG_ERROR_RECOVERY(5, shost_printk(KERN_INFO, shost,
@@ -248,7 +249,7 @@ int scsi_eh_scmd_add(struct scsi_cmnd *scmd, int eh_flag)
 		eh_flag &= ~SCSI_EH_CANCEL_CMD;
 	scmd->eh_eflags |= eh_flag;
 	list_add_tail(&scmd->eh_entry, &shost->eh_cmd_q);
-	shost->host_failed++;
+	atomic_inc(&shost->host_failed);
 	scsi_eh_wakeup(shost);
  out_unlock:
 	spin_unlock_irqrestore(shost->host_lock, flags);
@@ -1122,7 +1123,7 @@ static int scsi_eh_action(struct scsi_cmnd *scmd, int rtn)
  */
 void scsi_eh_finish_cmd(struct scsi_cmnd *scmd, struct list_head *done_q)
 {
-	scmd->device->host->host_failed--;
+	atomic_dec(&scmd->device->host->host_failed);
 	scmd->eh_eflags = 0;
 	list_move_tail(&scmd->eh_entry, done_q);
 }
@@ -2180,8 +2181,10 @@ int scsi_error_handler(void *data)
 		if (kthread_should_stop())
 			break;
 
-		if ((shost->host_failed == 0 && shost->host_eh_scheduled == 0) ||
-		    shost->host_failed != atomic_read(&shost->host_busy)) {
+		if ((atomic_read(&shost->host_failed) == 0 &&
+		     shost->host_eh_scheduled == 0) ||
+		    (atomic_read(&shost->host_failed) !=
+		     atomic_read(&shost->host_busy))) {
 			SCSI_LOG_ERROR_RECOVERY(1,
 				shost_printk(KERN_INFO, shost,
 					     "scsi_eh_%d: sleeping\n",
@@ -2195,7 +2198,7 @@ int scsi_error_handler(void *data)
 			shost_printk(KERN_INFO, shost,
 				     "scsi_eh_%d: waking up %d/%d/%d\n",
 				     shost->host_no, shost->host_eh_scheduled,
-				     shost->host_failed,
+				     atomic_read(&shost->host_failed),
 				     atomic_read(&shost->host_busy)));
 
 		/*

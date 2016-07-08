@@ -168,5 +168,11 @@ config DEFAULT_SECURITY
 	default "yama" if DEFAULT_SECURITY_YAMA
 	default "" if DEFAULT_SECURITY_DAC
 
+config SECURITY_BOOT_INIT
+	bool "Disable init & rdinit parameters in cmdline"
+	default n
+	help
+	  No support init and rdinit parameters in cmdline
+
 endmenu
 

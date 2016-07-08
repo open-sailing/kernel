@@ -1632,6 +1632,7 @@ static void init_cgroup_root(struct cgroup_root *root,
 	cgrp->root = root;
 	init_cgroup_housekeeping(cgrp);
 	idr_init(&root->cgroup_idr);
+	init_waitqueue_head(&root->wait);
 
 	root->flags = opts->flags;
 	if (opts->release_agent)
@@ -1902,6 +1903,17 @@ static void cgroup_kill_sb(struct super_block *sb)
 {
 	struct kernfs_root *kf_root = kernfs_root_from_sb(sb);
 	struct cgroup_root *root = cgroup_root_from_kf(kf_root);
+
+	/*
+	 * Wait if there are cgroups being destroyed, because the destruction
+	 * is asynchronous. On the other hand some controllers like memcg
+	 * may pin cgroups for a very long time, so don't wait forever.
+	 */
+	if (root != &cgrp_dfl_root) {
+		wait_event_timeout(root->wait,
+				   list_empty(&root->cgrp.self.children),
+				   msecs_to_jiffies(500));
+	}
 
 	/*
 	 * If @root doesn't have any mounts or children, start killing it.
@@ -2280,7 +2292,7 @@ static int cgroup_migrate(struct cgroup *cgrp, struct task_struct *leader,
 
 	/* methods shouldn't be called if no task is actually migrating */
 	if (list_empty(&tset.src_csets))
-		return 0;
+		return -ESRCH;
 
 	/* check that we can legitimately attach to the cgroup */
 	for_each_e_css(css, i, cgrp) {
@@ -2352,6 +2364,7 @@ static int cgroup_attach_task(struct cgroup *dst_cgrp,
 	LIST_HEAD(preloaded_csets);
 	struct task_struct *task;
 	int ret;
+	bool same_cgrp = true;
 
 	/* look up all src csets */
 	down_read(&css_set_rwsem);
@@ -2360,6 +2373,8 @@ static int cgroup_attach_task(struct cgroup *dst_cgrp,
 	do {
 		cgroup_migrate_add_src(task_css_set(task), dst_cgrp,
 				       &preloaded_csets);
+		if (task_css_set(task)->mg_src_cgrp != dst_cgrp)
+			same_cgrp = false;
 		if (!threadgroup)
 			break;
 	} while_each_thread(leader, task);
@@ -2372,6 +2387,10 @@ static int cgroup_attach_task(struct cgroup *dst_cgrp,
 		ret = cgroup_migrate(dst_cgrp, leader, threadgroup);
 
 	cgroup_migrate_finish(&preloaded_csets);
+
+	if (same_cgrp)
+		ret = 0;
+
 	return ret;
 }
 
@@ -2453,6 +2472,7 @@ retry_find_task:
 		}
 	}
 
+	/* if no task is attached, return -ESRCH */
 	ret = cgroup_attach_task(cgrp, tsk, threadgroup);
 
 	threadgroup_unlock(tsk);
@@ -4452,6 +4472,10 @@ static void css_release_work_fn(struct work_struct *work)
 		 * cgrp->kn->priv backpointer.
 		 */
 		RCU_INIT_POINTER(*(void __rcu __force **)&cgrp->kn->priv, NULL);
+
+		if (css->parent && !css->parent->parent &&
+		    list_empty(&css->parent->children))
+			wake_up(&cgrp->root->wait);
 	}
 
 	mutex_unlock(&cgroup_mutex);
@@ -5154,6 +5178,7 @@ static int proc_cgroupstats_show(struct seq_file *m, void *v)
 {
 	struct cgroup_subsys *ss;
 	int i;
+	bool dead;
 
 	seq_puts(m, "#subsys_name\thierarchy\tnum_cgroups\tenabled\n");
 	/*
@@ -5163,10 +5188,13 @@ static int proc_cgroupstats_show(struct seq_file *m, void *v)
 	 */
 	mutex_lock(&cgroup_mutex);
 
-	for_each_subsys(ss, i)
+	for_each_subsys(ss, i) {
+		dead = percpu_ref_is_dying(&ss->root->cgrp.self.refcnt);
 		seq_printf(m, "%s\t%d\t%d\t%d\n",
-			   ss->name, ss->root->hierarchy_id,
-			   atomic_read(&ss->root->nr_cgrps), !ss->disabled);
+			   ss->name, dead ? 0 : ss->root->hierarchy_id,
+			   dead ? 0 : atomic_read(&ss->root->nr_cgrps),
+			   !ss->disabled);
+	}
 
 	mutex_unlock(&cgroup_mutex);
 	return 0;

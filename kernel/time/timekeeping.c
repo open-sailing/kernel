@@ -1944,7 +1944,7 @@ ktime_t ktime_get_update_offsets_tick(ktime_t *offs_real, ktime_t *offs_boot,
 		seq = read_seqcount_begin(&tk_core.seq);
 
 		base = tk->tkr_mono.base;
-		nsecs = tk->tkr_mono.xtime_nsec >> tk->tkr_mono.shift;
+		nsecs = timekeeping_get_ns(&tk->tkr_mono);
 
 		*offs_real = tk->offs_real;
 		*offs_boot = tk->offs_boot;

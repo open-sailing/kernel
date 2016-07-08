@@ -530,4 +530,9 @@ config MTD_NAND_HISI504
 	help
 	  Enables support for NAND controller on Hisilicon SoC Hip04.
 
+config MTD_NAND_HISI650
+	tristate "Support for NAND controller on Hisilicon SoC Hip05"
+	help
+	  Enables support for NAND Flash controller on Hisilicon SoC Hip05.
+
 endif # MTD_NAND

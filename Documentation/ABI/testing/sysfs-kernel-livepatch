@@ -8,6 +8,15 @@ Description:
 		The /sys/kernel/livepatch directory contains subdirectories for
 		each loaded live patch module.
 
+What:		/sys/kernel/livepatch/state
+Date:		Jun 2015
+KernelVersion:	4.1.0
+Contact:	live-patching@vger.kernel.org
+Description:
+		The state file is read-only and shows the patches that have
+		been applied, including the patch stack index and state of
+		each patch.
+
 What:		/sys/kernel/livepatch/<patch>
 Date:		Nov 2014
 KernelVersion:	3.19.0
@@ -34,6 +43,7 @@ Description:
 		that is patched within the object.
 
 What:		/sys/kernel/livepatch/<patch>/<object>/<function>
+		or: /sys/kernel/livepatch/<patch>/<object>/<function-number>
 Date:		Nov 2014
 KernelVersion:	3.19.0
 Contact:	live-patching@vger.kernel.org

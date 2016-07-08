@@ -21,7 +21,7 @@
 #include <linux/init.h>
 #include <linux/linkage.h>
 
-#include <asm/alternative-asm.h>
+#include <asm/alternative.h>
 #include <asm/assembler.h>
 #include <asm/asm-offsets.h>
 #include <asm/cpufeature.h>
@@ -86,6 +86,15 @@
 	stp	x26, x27, [sp, #16 * 13]
 	stp	x28, x29, [sp, #16 * 14]
 
+	.if	\el == 1
+	mrs     x19, mdscr_el1
+	and     x20, x19, #1
+	str     x20, [sp, #S_FLAGS]
+	tbz     x20, #0, 1f
+	disable_step x19
+1:
+	.endif
+
 	.if	\el == 0
 	mrs	x21, sp_el0
 	get_thread_info tsk			// Ensure MDSCR_EL1.SS is clear,
@@ -116,7 +125,7 @@
 	*/
 	.endm
 
-	.macro	kernel_exit, el, ret = 0
+	.macro	kernel_exit, el
 	ldp	x21, x22, [sp, #S_PC]		// load ELR, SPSR
 	.if	\el == 0
 	ct_user_enter
@@ -143,11 +152,16 @@
 	.endif
 	msr	elr_el1, x21			// set up the return data
 	msr	spsr_el1, x22
-	.if	\ret
-	ldr	x1, [sp, #S_X1]			// preserve x0 (syscall return)
-	.else
-	ldp	x0, x1, [sp, #16 * 0]
+
+	.if	\el == 1
+	ldr	x19, [sp, #S_FLAGS]
+	tbz	x19, #0, 1f
+	mrs	x19, mdscr_el1
+	enable_step	x19
+1:
 	.endif
+
+	ldp	x0, x1, [sp, #16 * 0]
 	ldp	x2, x3, [sp, #16 * 1]
 	ldp	x4, x5, [sp, #16 * 2]
 	ldp	x6, x7, [sp, #16 * 3]
@@ -199,6 +213,7 @@ tsk	.req	x28		// current thread_info
  * Exception vectors.
  */
 
+	.pushsection ".entry.text", "ax"
 	.align	11
 ENTRY(vectors)
 	ventry	el1_sync_invalid		// Synchronous EL1t
@@ -216,7 +231,7 @@ ENTRY(vectors)
 	ventry	el0_fiq_invalid			// FIQ 64-bit EL0
 	ventry	el0_error_invalid		// Error 64-bit EL0
 
-#ifdef CONFIG_COMPAT
+#ifdef CONFIG_AARCH32_EL0
 	ventry	el0_sync_compat			// Synchronous 32-bit EL0
 	ventry	el0_irq_compat			// IRQ 32-bit EL0
 	ventry	el0_fiq_invalid_compat		// FIQ 32-bit EL0
@@ -233,7 +248,7 @@ END(vectors)
  * Invalid mode handlers
  */
 	.macro	inv_entry, el, reason, regsize = 64
-	kernel_entry el, \regsize
+	kernel_entry \el, \regsize
 	mov	x0, sp
 	mov	x1, #\reason
 	mrs	x2, esr_el1
@@ -256,7 +271,7 @@ el0_error_invalid:
 	inv_entry 0, BAD_ERROR
 ENDPROC(el0_error_invalid)
 
-#ifdef CONFIG_COMPAT
+#ifdef CONFIG_AARCH32_EL0
 el0_fiq_invalid_compat:
 	inv_entry 0, BAD_FIQ, 32
 ENDPROC(el0_fiq_invalid_compat)
@@ -418,7 +433,7 @@ el0_sync:
 	b.ge	el0_dbg
 	b	el0_inv
 
-#ifdef CONFIG_COMPAT
+#ifdef CONFIG_AARCH32_EL0
 	.align	6
 el0_sync_compat:
 	kernel_entry 0, 32
@@ -609,17 +624,21 @@ ENDPROC(cpu_switch_to)
  */
 ret_fast_syscall:
 	disable_irq				// disable interrupts
-	ldr	x1, [tsk, #TI_FLAGS]
+	str	x0, [sp, #S_X0]			// returned x0
+	ldr	x1, [tsk, #TI_FLAGS]		// re-check for syscall tracing
+	and	x2, x1, #_TIF_SYSCALL_WORK
+	cbnz	x2, ret_fast_syscall_trace
 	and	x2, x1, #_TIF_WORK_MASK
-	cbnz	x2, fast_work_pending
+	cbnz	x2, work_pending
 	enable_step_tsk x1, x2
-	kernel_exit 0, ret = 1
+	kernel_exit 0
+ret_fast_syscall_trace:
+	enable_irq				// enable interrupts
+	b	__sys_trace_return_skipped
 
 /*
  * Ok, we need to do extra processing, enter the slow path.
  */
-fast_work_pending:
-	str	x0, [sp, #S_X0]			// returned x0
 work_pending:
 	tbnz	x1, #TIF_NEED_RESCHED, work_resched
 	/* TIF_SIGPENDING, TIF_NOTIFY_RESUME or TIF_FOREIGN_FPSTATE case */
@@ -643,7 +662,7 @@ ret_to_user:
 	cbnz	x2, work_pending
 	enable_step_tsk x1, x2
 no_work_pending:
-	kernel_exit 0, ret = 0
+	kernel_exit 0
 ENDPROC(ret_to_user)
 
 /*
@@ -663,9 +682,13 @@ ENDPROC(ret_from_fork)
  */
 	.align	6
 el0_svc:
-	adrp	stbl, sys_call_table		// load syscall table pointer
 	uxtw	scno, w8			// syscall number in w8
 	mov	sc_nr, #__NR_syscalls
+#ifdef CONFIG_ARM64_ILP32
+	ldr	x16, [tsk, #TI_FLAGS]
+	tbnz	x16, #TIF_32BIT_AARCH64, el0_ilp32_svc // We are using ILP32
+#endif
+	adrp	stbl, sys_call_table		// load syscall table pointer
 el0_svc_naked:					// compat entry point
 	stp	x0, scno, [sp, #S_ORIG_X0]	// save the original x0 and syscall number
 	enable_dbg_and_irq
@@ -684,6 +707,12 @@ ni_sys:
 	bl	do_ni_syscall
 	b	ret_fast_syscall
 ENDPROC(el0_svc)
+
+#ifdef CONFIG_ARM64_ILP32
+el0_ilp32_svc:
+	adrp	stbl, sys_call_ilp32_table // load syscall table pointer
+	b el0_svc_naked
+#endif
 
 	/*
 	 * This is the really slow path.  We're going to be doing context
@@ -729,3 +758,5 @@ ENTRY(sys_rt_sigreturn_wrapper)
 	mov	x0, sp
 	b	sys_rt_sigreturn
 ENDPROC(sys_rt_sigreturn_wrapper)
+
+	.popsection

@@ -1,0 +1,43 @@
+/**
+ * dts file for IT lemon-1p Board(32cores)
+ *
+ * Copyright (C) 2014,2015 Hisilicon Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * publishhed by the Free Software Foundation.
+ *
+ */
+
+/dts-v1/;
+
+/memreserve/ 0x00000000 0x00010000;
+/include/ "hisi_hi1612_1p.dtsi"
+
+/ {
+	model = "Hisilicon Hi1612 Development Board";
+	compatible = "hisilicon,lemon-1p", "hisilicon,hi1612";
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x0 0x0 0x40000000>;
+		numa-node-id = <0>;
+	};
+
+	chosen {
+		bootargs = "rdinit=/sbin/init console=ttyS0,115200 earlycon=hisilpcuart,mmio,0xa01b0000,0,0x2f8 initrd=0x7000000,500M pci=pcie_bus_perf vga=0x317 console=tty0";
+	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		pwrbutton {
+			label = "Power Button";
+			gpios = <&porta 8 1>;
+			linux,code = <116>;
+			debounce-interval = <0>;
+		};
+	};
+};

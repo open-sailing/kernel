@@ -8,6 +8,7 @@
 
 config ARC
 	def_bool y
+	select ARCH_32BIT_OFF_T
 	select BUILDTIME_EXTABLE_SORT
 	select COMMON_CLK
 	select CLONE_BACKWARDS

@@ -1,0 +1,110 @@
+Hisilicon hi1382 Ethernet Controller
+
+* Ethernet controller node
+
+Required properties:
+- compatible: should be "hisilicon,hi1382-gmac".
+- reg: address and length of the register set for the device.
+	first record is the eth sub sysctrl base addr.
+	second record is the ppe base addr.
+	third record is the GEx base addr.
+- interrupts: interrupt for the device.
+- port-id: <GEX>
+	different platform the GE is different.
+	on EVB the GE is 0x4.
+	on UMPTE the GE is 0x4.
+	on UBPPE the GE is 0x3.
+- phy-mode: see ethernet.txt [1].
+
+Optional properties:
+- phy-handle: see ethernet.txt [1].
+	on EVB the phy is 24.
+	on UMPTE the phy is 8.
+	on UBPPE there is no phy.
+- phy-id: to identify which is use phy or i2c.
+	on EVB the phy is bcm54219 the id is 0x600d8590.
+	son UBPPE use I2C.
+
+[1] Documentation/devicetree/bindings/net/ethernet.txt
+
+
+Control rx & tx fifos of all ethernet controllers.
+Have 2048 recv channels shared by all ethernet controllers, only if no overlap.
+For the Hi1382 Gmac start form 1791. the lenth is 255. (while the max is 256).
+
+* MDIO bus node:
+
+Required properties:
+
+- compatible: should be "hisilicon,hi1382-mdio".
+- Inherits from MDIO bus node binding [2]
+[2] Documentation/devicetree/bindings/net/phy.txt
+
+Example:
+
+in 1382.dtsi:
+	mdio {
+		compatible = "hisilicon,hi1382-mdio";
+		reg = <0x28f1000 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		phy0: ethernet-phy@0 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <0>;
+			max-speed = <100>;
+		};
+	};
+
+
+	gmac0: gmac@fb800000 {
+		compatible = "hisilicon,hi1382-gmac";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		phy-mode = "sgmii";
+		interrupt-parent = <&mbigen_eth>;
+		interrupts = <0x10800 33 0 5 >,
+			     <0x10800 33 1 5 >,
+			     <0x10800 33 2 5 >,
+			     <0x10800 33 3 5 >,
+			     <0x10800 33 4 5 >,
+			     <0x10800 33 5 5 >,
+			     <0x10800 33 6 5 >,
+			     <0x10800 33 7 5 >,
+			     <0x10800 33 8 5 >,
+			     <0x10800 33 9 5 >,
+			     <0x10800 33 10 5 >,
+			     <0x10800 33 11 5 >,
+			     <0x10800 33 12 5 >,
+			     <0x10800 33 13 5 >,
+			     <0x10800 33 14 5 >,
+			     <0x10800 33 15 5 >,
+			     <0x10800 33 16 5 >,
+			     <0x10800 33 17 5 >,
+			     <0x10800 33 18 5 >,
+			     <0x10800 33 19 5 >,
+			     <0x10800 33 20 5 >,
+			     <0x10800 33 21 5 >,
+			     <0x10800 33 22 5 >,
+			     <0x10800 33 23 5 >,
+			     <0x10800 33 24 5 >,
+			     <0x10800 33 25 5 >,
+			     <0x10800 33 26 5 >,
+			     <0x10800 33 27 5 >,
+			     <0x10800 33 28 5 >,
+			     <0x10800 33 29 5 >,
+			     <0x10800 33 30 5 >,
+			     <0x10800 33 31 5 >,
+			     <0x10800 33 32 5 >;
+	};
+
+in hi1382-evb.dts
+
+	gmac0: gmac@fb800000 {
+		phy-handle = <&phy24>;
+		port-id = <4>;
+		phy-id = <0x600d8590>;
+		reg = <0xfb000000 0x10000>,
+		      <0xfb400000 0x30000>,
+		      <0xfb804000 0x1000>;
+	};

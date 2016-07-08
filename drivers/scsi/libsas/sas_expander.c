@@ -1902,8 +1902,6 @@ static void sas_unregister_devs_sas_addr(struct domain_device *parent,
 	if (phy->port) {
 		sas_port_delete_phy(phy->port, phy->phy);
 		sas_device_set_phy(found, phy->port);
-		if (phy->port->num_phys == 0)
-			sas_port_delete(phy->port);
 		phy->port = NULL;
 	}
 }

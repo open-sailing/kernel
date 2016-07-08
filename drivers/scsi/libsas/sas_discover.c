@@ -362,11 +362,17 @@ static void sas_destruct_devices(struct work_struct *work)
 	clear_bit(DISCE_DESTRUCT, &port->disc.pending);
 
 	list_for_each_entry_safe(dev, n, &port->destroy_list, disco_list_node) {
+		struct sas_port *sas_port =
+			dev_to_sas_port(dev->rphy->dev.parent);
+
 		list_del_init(&dev->disco_list_node);
 
 		sas_remove_children(&dev->rphy->dev);
 		sas_rphy_delete(dev->rphy);
 		sas_unregister_common_dev(port, dev);
+
+		if (sas_port->num_phys == 0)
+			sas_port_delete(sas_port);
 	}
 }
 

@@ -316,7 +316,8 @@ void scsi_device_unbusy(struct scsi_device *sdev)
 		atomic_dec(&starget->target_busy);
 
 	if (unlikely(scsi_host_in_recovery(shost) &&
-		     (shost->host_failed || shost->host_eh_scheduled))) {
+		     (atomic_read(&shost->host_failed) ||
+		      shost->host_eh_scheduled))) {
 		spin_lock_irqsave(shost->host_lock, flags);
 		scsi_eh_wakeup(shost);
 		spin_unlock_irqrestore(shost->host_lock, flags);

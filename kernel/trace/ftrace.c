@@ -4179,6 +4179,38 @@ int ftrace_set_filter_ip(struct ftrace_ops *ops, unsigned long ip,
 }
 EXPORT_SYMBOL_GPL(ftrace_set_filter_ip);
 
+/**
+ * ftrace_function_stub_ip - get the profile stub calling location by the
+ * function address. It is useful for the platform that doesn't place the
+ * function profiling call at the start of the function.
+ * @addr - the function address to get the stub ip
+ *
+ * It returns the corresponding profile stub calling location if founded, else
+ * return zero.
+ */
+unsigned long ftrace_function_stub_ip(unsigned long addr)
+{
+	struct ftrace_page *pg;
+	struct dyn_ftrace *rec;
+	unsigned long ret = 0;
+
+	mutex_lock(&ftrace_lock);
+
+	do_for_each_ftrace_rec(pg, rec) {
+		unsigned long offset;
+
+		if (kallsyms_lookup_size_offset(rec->ip, NULL, &offset)
+				&& addr + offset == rec->ip) {
+			ret = rec->ip;
+			goto out_unlock;
+		}
+	} while_for_each_ftrace_rec()
+out_unlock:
+	mutex_unlock(&ftrace_lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(ftrace_function_stub_ip);
+
 static int
 ftrace_set_regex(struct ftrace_ops *ops, unsigned char *buf, int len,
 		 int reset, int enable)

@@ -355,8 +355,8 @@ static bool convert_bpf_extensions(struct sock_filter *fp,
  * for socket filters: ctx == 'struct sk_buff *', for seccomp:
  * ctx == 'struct seccomp_data *'.
  */
-int bpf_convert_filter(struct sock_filter *prog, int len,
-		       struct bpf_insn *new_prog, int *new_len)
+static int bpf_convert_filter(struct sock_filter *prog, int len,
+			      struct bpf_insn *new_prog, int *new_len)
 {
 	int new_flen = 0, pass = 0, target, i;
 	struct bpf_insn *new_insn;
@@ -751,7 +751,8 @@ static bool chk_code_allowed(u16 code_to_probe)
  *
  * Returns 0 if the rule set is legal or -EINVAL if not.
  */
-int bpf_check_classic(const struct sock_filter *filter, unsigned int flen)
+static int bpf_check_classic(const struct sock_filter *filter,
+			     unsigned int flen)
 {
 	bool anc_found;
 	int pc;
@@ -830,7 +831,6 @@ int bpf_check_classic(const struct sock_filter *filter, unsigned int flen)
 
 	return -EINVAL;
 }
-EXPORT_SYMBOL(bpf_check_classic);
 
 static int bpf_prog_store_orig_filter(struct bpf_prog *fp,
 				      const struct sock_fprog *fprog)
@@ -993,7 +993,8 @@ out_err:
 	return ERR_PTR(err);
 }
 
-static struct bpf_prog *bpf_prepare_filter(struct bpf_prog *fp)
+static struct bpf_prog *bpf_prepare_filter(struct bpf_prog *fp,
+					   bpf_aux_classic_check_t trans)
 {
 	int err;
 
@@ -1004,6 +1005,17 @@ static struct bpf_prog *bpf_prepare_filter(struct bpf_prog *fp)
 	if (err) {
 		__bpf_prog_release(fp);
 		return ERR_PTR(err);
+	}
+
+	/* There might be additional checks and transformations
+	 * needed on classic filters, f.e. in case of seccomp.
+	 */
+	if (trans) {
+		err = trans(fp->insns, fp->len);
+		if (err) {
+			__bpf_prog_release(fp);
+			return ERR_PTR(err);
+		}
 	}
 
 	/* Probe if we can JIT compile the filter and if so, do
@@ -1055,7 +1067,7 @@ int bpf_prog_create(struct bpf_prog **pfp, struct sock_fprog_kern *fprog)
 	/* bpf_prepare_filter() already takes care of freeing
 	 * memory in case something goes wrong.
 	 */
-	fp = bpf_prepare_filter(fp);
+	fp = bpf_prepare_filter(fp, NULL);
 	if (IS_ERR(fp))
 		return PTR_ERR(fp);
 
@@ -1063,6 +1075,59 @@ int bpf_prog_create(struct bpf_prog **pfp, struct sock_fprog_kern *fprog)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(bpf_prog_create);
+
+/**
+ *	bpf_prog_create_from_user - create an unattached filter from user buffer
+ *	@pfp: the unattached filter that is created
+ *	@fprog: the filter program
+ *	@trans: post-classic verifier transformation handler
+ *	@save_orig: save classic BPF program
+ *
+ * This function effectively does the same as bpf_prog_create(), only
+ * that it builds up its insns buffer from user space provided buffer.
+ * It also allows for passing a bpf_aux_classic_check_t handler.
+ */
+int bpf_prog_create_from_user(struct bpf_prog **pfp, struct sock_fprog *fprog,
+			      bpf_aux_classic_check_t trans, bool save_orig)
+{
+	unsigned int fsize = bpf_classic_proglen(fprog);
+	struct bpf_prog *fp;
+	int err;
+
+	/* Make sure new filter is there and in the right amounts. */
+	if (fprog->filter == NULL)
+		return -EINVAL;
+
+	fp = bpf_prog_alloc(bpf_prog_size(fprog->len), 0);
+	if (!fp)
+		return -ENOMEM;
+
+	if (copy_from_user(fp->insns, fprog->filter, fsize)) {
+		__bpf_prog_free(fp);
+		return -EFAULT;
+	}
+
+	fp->len = fprog->len;
+	fp->orig_prog = NULL;
+
+	if (save_orig) {
+		err = bpf_prog_store_orig_filter(fp, fprog);
+		if (err) {
+			__bpf_prog_free(fp);
+			return -ENOMEM;
+		}
+	}
+
+	/* bpf_prepare_filter() already takes care of freeing
+	 * memory in case something goes wrong.
+	 */
+	fp = bpf_prepare_filter(fp, trans);
+	if (IS_ERR(fp))
+		return PTR_ERR(fp);
+
+	*pfp = fp;
+	return 0;
+}
 
 void bpf_prog_destroy(struct bpf_prog *fp)
 {
@@ -1140,7 +1205,7 @@ int sk_attach_filter(struct sock_fprog *fprog, struct sock *sk)
 	/* bpf_prepare_filter() already takes care of freeing
 	 * memory in case something goes wrong.
 	 */
-	prog = bpf_prepare_filter(prog);
+	prog = bpf_prepare_filter(prog, NULL);
 	if (IS_ERR(prog))
 		return PTR_ERR(prog);
 
@@ -1363,6 +1428,8 @@ sk_filter_func_proto(enum bpf_func_id func_id)
 		return &bpf_get_prandom_u32_proto;
 	case BPF_FUNC_get_smp_processor_id:
 		return &bpf_get_smp_processor_id_proto;
+	case BPF_FUNC_tail_call:
+		return &bpf_tail_call_proto;
 	default:
 		return NULL;
 	}

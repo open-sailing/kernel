@@ -961,7 +961,7 @@ static int edac_create_debug_nodes(struct mem_ctl_info *mci)
 	mci->debugfs = parent;
 	return 0;
 nomem:
-	debugfs_remove(mci->debugfs);
+	debugfs_remove_recursive(mci->debugfs);
 	return -ENOMEM;
 }
 #endif
@@ -1080,7 +1080,7 @@ void edac_remove_sysfs_mci_device(struct mem_ctl_info *mci)
 	edac_dbg(0, "\n");
 
 #ifdef CONFIG_EDAC_DEBUG
-	debugfs_remove(mci->debugfs);
+	debugfs_remove_recursive(mci->debugfs);
 #endif
 #ifdef CONFIG_EDAC_LEGACY_SYSFS
 	edac_delete_csrow_objects(mci);

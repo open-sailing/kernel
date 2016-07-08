@@ -138,6 +138,18 @@ my %text_sections = (
      ".text.unlikely" => 1,
 );
 
+sub is_text_section {
+    my ($name) = shift;
+
+    # match ".text.function" case
+    unless ($text_sections{$name}) {
+        return $name =~ m/^\.text\.\S+/;
+    }
+
+    return 1;
+}
+
+
 # Note: we are nice to C-programmers here, thus we skip the '||='-idiom.
 $objdump = 'objdump' if (!$objdump);
 $objcopy = 'objcopy' if (!$objcopy);
@@ -280,7 +292,7 @@ if ($arch eq "x86_64") {
 } elsif ($arch eq "arm64") {
     $alignment = 3;
     $section_type = '%progbits';
-    $mcount_regex = "^\\s*([0-9a-fA-F]+):\\s*R_AARCH64_CALL26\\s+_mcount\$";
+    $mcount_regex = "^\\s*([0-9a-fA-F]+):\\s*R_AARCH64_CALL26\\s+(_mcount|__fentry__)\$";
     $type = ".quad";
 } elsif ($arch eq "ia64") {
     $mcount_regex = "^\\s*([0-9a-fA-F]+):.*\\s_mcount\$";
@@ -498,7 +510,7 @@ while (<IN>) {
 	$read_headers = 0;
 
 	# Only record text sections that we know are safe
-	$read_function = defined($text_sections{$1});
+	$read_function = is_text_section($1);
 	# print out any recorded offsets
 	update_funcs();
 

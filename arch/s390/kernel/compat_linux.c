@@ -86,6 +86,12 @@
 #define SET_STAT_UID(stat, uid)		(stat).st_uid = high2lowuid(uid)
 #define SET_STAT_GID(stat, gid)		(stat).st_gid = high2lowgid(gid)
 
+COMPAT_SYSCALL_WRAP3(s390_pci_mmio_write, const unsigned long, mmio_addr,
+		     const void __user *, user_buffer, const size_t, length);
+
+COMPAT_SYSCALL_WRAP3(s390_pci_mmio_read, const unsigned long, mmio_addr,
+		     void __user *, user_buffer, const size_t, length);
+
 COMPAT_SYSCALL_DEFINE3(s390_chown16, const char __user *, filename,
 		       u16, user, u16, group)
 {

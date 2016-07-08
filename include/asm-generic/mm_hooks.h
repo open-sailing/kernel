@@ -19,6 +19,10 @@ static inline void arch_unmap(struct mm_struct *mm,
 			struct vm_area_struct *vma,
 			unsigned long start, unsigned long end)
 {
+#ifdef CONFIG_ARCH_WANT_VDSO_MAP
+	if (start <= mm->context.vdso && mm->context.vdso < end)
+		mm->context.vdso = 0;
+#endif  /* CONFIG_ARCH_WANT_VDSO_MAP */
 }
 
 static inline void arch_bprm_mm_init(struct mm_struct *mm,
