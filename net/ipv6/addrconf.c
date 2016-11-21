@@ -3285,6 +3285,12 @@ restart:
 		spin_unlock_bh(&addrconf_hash_lock);
 	}
 
+	/*
+	 * It is safe here to schedule out to avoid softlocking if preempt
+	 * is disabled.
+	 */
+	cond_resched();
+
 	write_lock_bh(&idev->lock);
 
 	addrconf_del_rs_timer(idev);

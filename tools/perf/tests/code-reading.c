@@ -24,6 +24,15 @@ struct state {
 	size_t done_cnt;
 };
 
+static bool bigendian(void)
+{
+	unsigned char str[] = { 0x1, 0x2, 0x3, 0x4, 0x0, 0x0, 0x0, 0x0};
+	unsigned int *ptr;
+
+	ptr = (unsigned int *)(void *)str;
+	return *ptr == 0x01020304;
+}
+
 static unsigned int hex(char c)
 {
 	if (c >= '0' && c <= '9')
@@ -33,52 +42,97 @@ static unsigned int hex(char c)
 	return c - 'A' + 10;
 }
 
-static void read_objdump_line(const char *line, size_t line_len, void **buf,
-			      size_t *len)
+static size_t read_objdump_chunk(const char **line, unsigned char **buf,
+				 size_t *buf_len)
+{
+	size_t bytes_read = 0;
+	unsigned char *chunk_start = *buf;
+
+	/* Read bytes */
+	while (*buf_len > 0) {
+		char c1, c2;
+
+		/* Get 2 hex digits */
+		c1 = *(*line)++;
+		if (!isxdigit(c1))
+			break;
+		c2 = *(*line)++;
+		if (!isxdigit(c2))
+			break;
+
+		/* Store byte and advance buf */
+		**buf = (hex(c1) << 4) | hex(c2);
+		(*buf)++;
+		(*buf_len)--;
+		bytes_read++;
+
+		/* End of chunk? */
+		if (isspace(**line))
+			break;
+	}
+
+	/*
+	 * objdump will display raw insn as LE if code endian
+	 * is LE and bytes_per_chunk > 1. In that case reverse
+	 * the chunk we just read.
+	 */
+	if (bytes_read > 1 && !bigendian()) {
+		unsigned char *chunk_end = chunk_start + bytes_read - 1;
+		unsigned char tmp;
+
+		while (chunk_start < chunk_end) {
+			tmp = *chunk_start;
+			*chunk_start = *chunk_end;
+			*chunk_end = tmp;
+			chunk_start++;
+			chunk_end--;
+		}
+	}
+
+	return bytes_read;
+}
+
+static size_t read_objdump_line(const char *line, unsigned char *buf,
+				size_t buf_len)
 {
 	const char *p;
-	size_t i;
+	size_t ret, bytes_read = 0;
 
 	/* Skip to a colon */
 	p = strchr(line, ':');
 	if (!p)
-		return;
-	i = p + 1 - line;
+		return 0;
+	p++;
 
-	/* Read bytes */
-	while (*len) {
-		char c1, c2;
-
-		/* Skip spaces */
-		for (; i < line_len; i++) {
-			if (!isspace(line[i]))
-				break;
-		}
-		/* Get 2 hex digits */
-		if (i >= line_len || !isxdigit(line[i]))
+	/* Skip initial spaces */
+	while (*p) {
+		if (!isspace(*p))
 			break;
-		c1 = line[i++];
-		if (i >= line_len || !isxdigit(line[i]))
-			break;
-		c2 = line[i++];
-		/* Followed by a space */
-		if (i < line_len && line[i] && !isspace(line[i]))
-			break;
-		/* Store byte */
-		*(unsigned char *)*buf = (hex(c1) << 4) | hex(c2);
-		*buf += 1;
-		*len -= 1;
+		p++;
 	}
+
+	do {
+		ret = read_objdump_chunk(&p, &buf, &buf_len);
+		bytes_read += ret;
+		p++;
+	} while (ret > 0);
+
+	/* return number of successfully read bytes */
+	return bytes_read;
 }
 
-static int read_objdump_output(FILE *f, void **buf, size_t *len)
+static int read_objdump_output(FILE *f, void *buf, size_t *len, u64 start_addr)
 {
 	char *line = NULL;
-	size_t line_len;
+	size_t line_len, off_last = 0;
 	ssize_t ret;
 	int err = 0;
+	u64 addr, last_addr = start_addr;
 
-	while (1) {
+	while (off_last < *len) {
+		size_t off, read_bytes, written_bytes;
+		unsigned char tmp[BUFSZ];
+
 		ret = getline(&line, &line_len, f);
 		if (feof(f))
 			break;
@@ -87,8 +141,32 @@ static int read_objdump_output(FILE *f, void **buf, size_t *len)
 			err = -1;
 			break;
 		}
-		read_objdump_line(line, ret, buf, len);
+
+		/* read objdump data into temporary buffer */
+		read_bytes = read_objdump_line(line, tmp, sizeof(tmp));
+		if (!read_bytes)
+			continue;
+
+		if (sscanf(line, "%"PRIx64, &addr) != 1)
+			continue;
+		if (addr < last_addr) {
+			pr_debug("addr going backwards, read beyond section?\n");
+			break;
+		}
+		last_addr = addr;
+
+		/* copy it from temporary buffer to 'buf' according
+		 * to address on current objdump line */
+		off = addr - start_addr;
+		if (off >= *len)
+			break;
+		written_bytes = MIN(read_bytes, *len - off);
+		memcpy(buf + off, tmp, written_bytes);
+		off_last = off + written_bytes;
 	}
+
+	/* len returns number of bytes that could not be read */
+	*len -= off_last;
 
 	free(line);
 
@@ -103,7 +181,7 @@ static int read_via_objdump(const char *filename, u64 addr, void *buf,
 	FILE *f;
 	int ret;
 
-	fmt = "%s -d --start-address=0x%"PRIx64" --stop-address=0x%"PRIx64" %s";
+	fmt = "%s -z -d --start-address=0x%"PRIx64" --stop-address=0x%"PRIx64" %s";
 	ret = snprintf(cmd, sizeof(cmd), fmt, "objdump", addr, addr + len,
 		       filename);
 	if (ret <= 0 || (size_t)ret >= sizeof(cmd))
@@ -120,9 +198,9 @@ static int read_via_objdump(const char *filename, u64 addr, void *buf,
 		return -1;
 	}
 
-	ret = read_objdump_output(f, &buf, &len);
+	ret = read_objdump_output(f, buf, &len, addr);
 	if (len) {
-		pr_debug("objdump read too few bytes\n");
+		pr_debug("objdump read too few bytes: %zu\n", len);
 		if (!ret)
 			ret = len;
 	}
@@ -130,6 +208,18 @@ static int read_via_objdump(const char *filename, u64 addr, void *buf,
 	pclose(f);
 
 	return ret;
+}
+
+static void dump_buf(unsigned char *buf, size_t len)
+{
+	size_t i;
+
+	for (i = 0; i < len; i++) {
+		pr_debug("0x%02x ", buf[i]);
+		if (i % 16 == 15)
+			pr_debug("\n");
+	}
+	pr_debug("\n");
 }
 
 static int read_object_code(u64 addr, size_t len, u8 cpumode,
@@ -234,6 +324,10 @@ static int read_object_code(u64 addr, size_t len, u8 cpumode,
 	/* The results should be identical */
 	if (memcmp(buf1, buf2, len)) {
 		pr_debug("Bytes read differ from those read by objdump\n");
+		pr_debug("buf1 (dso):\n");
+		dump_buf(buf1, len);
+		pr_debug("buf2 (objdump):\n");
+		dump_buf(buf2, len);
 		return -1;
 	}
 	pr_debug("Bytes read match those read by objdump\n");

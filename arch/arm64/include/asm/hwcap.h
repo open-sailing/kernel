@@ -46,9 +46,7 @@
  */
 #define ELF_HWCAP		(elf_hwcap)
 
-#ifdef CONFIG_COMPAT
-#define COMPAT_ELF_HWCAP	(compat_elf_hwcap)
-#define COMPAT_ELF_HWCAP2	(compat_elf_hwcap2)
+#ifdef CONFIG_AARCH32_EL0
 extern unsigned int compat_elf_hwcap, compat_elf_hwcap2;
 #endif
 

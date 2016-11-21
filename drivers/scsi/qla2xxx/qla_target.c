@@ -1696,15 +1696,17 @@ static int qlt_check_reserve_free_req(struct scsi_qla_host *vha,
 		else
 			vha->req->cnt = vha->req->length -
 			    (vha->req->ring_index - cnt);
+
+		if (unlikely(vha->req->cnt < (req_cnt + 2))) {
+			ql_dbg(ql_dbg_io, vha, 0x305a,
+			    "qla_target(%d): There is no room in the request ring: vha->req->ring_index=%d, vha->req->cnt=%d, req_cnt=%d Req-out=%d Req-in=%d Req-Length=%d\n",
+			    vha->vp_idx, vha->req->ring_index,
+			    vha->req->cnt, req_cnt, cnt, cnt_in,
+			    vha->req->length);
+			return -EAGAIN;
+		}
 	}
 
-	if (unlikely(vha->req->cnt < (req_cnt + 2))) {
-		ql_dbg(ql_dbg_io, vha, 0x305a,
-		    "qla_target(%d): There is no room in the request ring: vha->req->ring_index=%d, vha->req->cnt=%d, req_cnt=%d Req-out=%d Req-in=%d Req-Length=%d\n",
-		    vha->vp_idx, vha->req->ring_index,
-		    vha->req->cnt, req_cnt, cnt, cnt_in, vha->req->length);
-		return -EAGAIN;
-	}
 	vha->req->cnt -= req_cnt;
 
 	return 0;
@@ -3080,11 +3082,10 @@ void qlt_abort_cmd(struct qla_tgt_cmd *cmd)
 {
 	struct qla_tgt *tgt = cmd->tgt;
 	struct scsi_qla_host *vha = tgt->vha;
-	struct se_cmd *se_cmd = &cmd->se_cmd;
 
 	ql_dbg(ql_dbg_tgt_mgt, vha, 0xf014,
 	    "qla_target(%d): terminating exchange for aborted cmd=%p "
-	    "(se_cmd=%p, tag=%llu)", vha->vp_idx, cmd, &cmd->se_cmd,
+	    "(se_cmd=%p, tag=%u)", vha->vp_idx, cmd, &cmd->se_cmd,
 	    cmd->tag);
 
 	cmd->state = QLA_TGT_STATE_ABORTED;

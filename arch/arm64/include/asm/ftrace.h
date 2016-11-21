@@ -13,13 +13,22 @@
 
 #include <asm/insn.h>
 
+#ifdef CC_USING_FENTRY
+#define MCOUNT_ADDR		((unsigned long)__fentry__)
+#else
 #define MCOUNT_ADDR		((unsigned long)_mcount)
+#endif
 #define MCOUNT_INSN_SIZE	AARCH64_INSN_SIZE
+
+#ifdef CONFIG_DYNAMIC_FTRACE
+#define ARCH_SUPPORTS_FTRACE_OPS 1
+#endif
 
 #ifndef __ASSEMBLY__
 #include <linux/compat.h>
 
 extern void _mcount(unsigned long);
+extern void __fentry__(unsigned long);
 extern void *return_address(unsigned int);
 
 struct dyn_arch_ftrace {

@@ -250,6 +250,7 @@ static unsigned int sas_ata_qc_issue(struct ata_queued_cmd *qc)
 		if (qc->scsicmd)
 			ASSIGN_SAS_TASK(qc->scsicmd, NULL);
 		sas_free_task(task);
+		qc->lldd_task = NULL;
 		ret = AC_ERR_SYSTEM;
 	}
 
@@ -622,32 +623,22 @@ static int sas_get_ata_command_set(struct domain_device *dev)
 	return ata_dev_classify(&tf);
 }
 
-void sas_probe_sata(struct asd_sas_port *port)
+void sas_probe_sata_device(struct domain_device *dev)
 {
-	struct domain_device *dev, *n;
+	struct asd_sas_port *port = dev->port;
 
-	mutex_lock(&port->ha->disco_mutex);
-	list_for_each_entry(dev, &port->disco_list, disco_list_node) {
-		if (!dev_is_sata(dev))
-			continue;
+	if (!port || !port->ha || !dev_is_sata(dev))
+		return;
 
-		ata_sas_async_probe(dev->sata_dev.ap);
-	}
-	mutex_unlock(&port->ha->disco_mutex);
+	ata_sas_async_probe(dev->sata_dev.ap);
 
-	list_for_each_entry_safe(dev, n, &port->disco_list, disco_list_node) {
-		if (!dev_is_sata(dev))
-			continue;
+	sas_ata_wait_eh(dev);
 
-		sas_ata_wait_eh(dev);
-
-		/* if libata could not bring the link up, don't surface
-		 * the device
-		 */
-		if (ata_dev_disabled(sas_to_ata_dev(dev)))
-			sas_fail_probe(dev, __func__, -ENODEV);
-	}
-
+	/* if libata could not bring the link up, don't surface
+	 * the device
+	 */
+	if (ata_dev_disabled(sas_to_ata_dev(dev)))
+		sas_fail_probe(dev, __func__, -ENODEV);
 }
 
 static void sas_ata_flush_pm_eh(struct asd_sas_port *port, const char *func)
@@ -732,7 +723,7 @@ int sas_discover_sata(struct domain_device *dev)
 	if (res)
 		return res;
 
-	sas_discover_event(dev->port, DISCE_PROBE);
+	sas_notify_device_event(dev, SAS_DEVICE_ADD);
 	return 0;
 }
 

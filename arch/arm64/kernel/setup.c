@@ -45,6 +45,7 @@
 #include <linux/of_fdt.h>
 #include <linux/of_platform.h>
 #include <linux/efi.h>
+#include <linux/cpufreq.h>
 #include <linux/personality.h>
 
 #include <asm/acpi.h>
@@ -54,6 +55,8 @@
 #include <asm/elf.h>
 #include <asm/cpufeature.h>
 #include <asm/cpu_ops.h>
+#include <asm/kasan.h>
+#include <asm/numa.h>
 #include <asm/sections.h>
 #include <asm/setup.h>
 #include <asm/smp_plat.h>
@@ -236,7 +239,8 @@ void __init up_late_init(void)
 
 static void __init setup_processor(void)
 {
-	u64 features, block;
+	u64 features;
+	s64 block;
 	u32 cwg;
 	int cls;
 
@@ -266,8 +270,8 @@ static void __init setup_processor(void)
 	 * for non-negative values. Negative values are reserved.
 	 */
 	features = read_cpuid(ID_AA64ISAR0_EL1);
-	block = (features >> 4) & 0xf;
-	if (!(block & 0x8)) {
+	block = cpuid_feature_extract_field(features, 4);
+	if (block > 0) {
 		switch (block) {
 		default:
 		case 2:
@@ -279,26 +283,36 @@ static void __init setup_processor(void)
 		}
 	}
 
-	block = (features >> 8) & 0xf;
-	if (block && !(block & 0x8))
+	if (cpuid_feature_extract_field(features, 8) > 0)
 		elf_hwcap |= HWCAP_SHA1;
 
-	block = (features >> 12) & 0xf;
-	if (block && !(block & 0x8))
+	if (cpuid_feature_extract_field(features, 12) > 0)
 		elf_hwcap |= HWCAP_SHA2;
 
-	block = (features >> 16) & 0xf;
-	if (block && !(block & 0x8))
+	if (cpuid_feature_extract_field(features, 16) > 0)
 		elf_hwcap |= HWCAP_CRC32;
+
+	block = cpuid_feature_extract_field(features, 20);
+	if (block > 0) {
+		switch (block) {
+		default:
+		case 2:
+			elf_hwcap |= HWCAP_ATOMICS;
+		case 1:
+			/* RESERVED */
+		case 0:
+			break;
+		}
+	}
 
 #ifdef CONFIG_COMPAT
 	/*
 	 * ID_ISAR5_EL1 carries similar information as above, but pertaining to
-	 * the Aarch32 32-bit execution state.
+	 * the AArch32 32-bit execution state.
 	 */
 	features = read_cpuid(ID_ISAR5_EL1);
-	block = (features >> 4) & 0xf;
-	if (!(block & 0x8)) {
+	block = cpuid_feature_extract_field(features, 4);
+	if (block > 0) {
 		switch (block) {
 		default:
 		case 2:
@@ -310,16 +324,13 @@ static void __init setup_processor(void)
 		}
 	}
 
-	block = (features >> 8) & 0xf;
-	if (block && !(block & 0x8))
+	if (cpuid_feature_extract_field(features, 8) > 0)
 		compat_elf_hwcap2 |= COMPAT_HWCAP2_SHA1;
 
-	block = (features >> 12) & 0xf;
-	if (block && !(block & 0x8))
+	if (cpuid_feature_extract_field(features, 12) > 0)
 		compat_elf_hwcap2 |= COMPAT_HWCAP2_SHA2;
 
-	block = (features >> 16) & 0xf;
-	if (block && !(block & 0x8))
+	if (cpuid_feature_extract_field(features, 16) > 0)
 		compat_elf_hwcap2 |= COMPAT_HWCAP2_CRC32;
 #endif
 }
@@ -366,6 +377,12 @@ static void __init request_standard_resources(void)
 		    kernel_data.end <= res->end)
 			request_resource(res, &kernel_data);
 	}
+
+#ifdef CONFIG_KEXEC
+	/* User space tools will detect the region with /proc/iomem */
+	if (crashk_res.end)
+		insert_resource(&iomem_resource, &crashk_res);
+#endif
 }
 
 u64 __cpu_logical_map[NR_CPUS] = { [0 ... NR_CPUS-1] = INVALID_HWID };
@@ -395,18 +412,25 @@ void __init setup_arch(char **cmdline_p)
 	local_async_enable();
 
 	efi_init();
+
 	arm64_memblock_init();
 
 	/* Parse the ACPI tables for possible boot-time configuration */
 	acpi_boot_table_init();
 
 	paging_init();
+	if (acpi_disabled)
+		unflatten_device_tree();
+
+	bootmem_init();
+
+	kasan_init();
+
 	request_standard_resources();
 
 	early_ioremap_reset();
 
 	if (acpi_disabled) {
-		unflatten_device_tree();
 		psci_dt_init();
 		cpu_read_bootcpu_ops();
 #ifdef CONFIG_SMP
@@ -448,6 +472,9 @@ static int __init topology_init(void)
 {
 	int i;
 
+	for_each_online_node(i)
+		register_one_node(i);
+
 	for_each_possible_cpu(i) {
 		struct cpu *cpu = &per_cpu(cpu_data.cpu, i);
 		cpu->hotpluggable = 1;
@@ -467,6 +494,7 @@ static const char *hwcap_str[] = {
 	"sha1",
 	"sha2",
 	"crc32",
+	"atomics",
 	NULL
 };
 
@@ -493,7 +521,8 @@ static const char *compat_hwcap_str[] = {
 	"idivt",
 	"vfpd32",
 	"lpae",
-	"evtstrm"
+	"evtstrm",
+	NULL
 };
 
 static const char *compat_hwcap2_str[] = {
@@ -513,6 +542,7 @@ static int c_show(struct seq_file *m, void *v)
 	for_each_online_cpu(i) {
 		struct cpuinfo_arm64 *cpuinfo = &per_cpu(cpu_data, i);
 		u32 midr = cpuinfo->reg_midr;
+		unsigned int cpu_freq = cpufreq_get(i);
 
 		/*
 		 * glibc reads /proc/cpuinfo to determine the number of
@@ -522,6 +552,11 @@ static int c_show(struct seq_file *m, void *v)
 #ifdef CONFIG_SMP
 		seq_printf(m, "processor\t: %d\n", i);
 #endif
+		/* TO FIX */
+		if (cpu_freq)
+			seq_printf(m, "cpu MHz\t\t: %u.%03u\n",
+				   cpu_freq / 1000,
+				   cpu_freq % 1000);
 
 		seq_printf(m, "BogoMIPS\t: %lu.%02lu\n",
 			   loops_per_jiffy / (500000UL/HZ),
@@ -577,6 +612,21 @@ static void c_stop(struct seq_file *m, void *v)
 {
 }
 
+#if defined(CONFIG_ARM64_INDIRECT_PIO)
+arm64_isa_io arm64_isa_pio;
+EXPORT_SYMBOL_GPL(arm64_isa_pio);
+int arm64_set_isa_pio(arm64_isa_io _arm64_isa_pio)
+{
+	if (arm64_isa_pio) {
+		pr_err("arm64 indirect port io have been hooked by others!\n");
+		return -1;
+	}
+	arm64_isa_pio = _arm64_isa_pio;
+
+	return 0;
+}
+
+#endif
 const struct seq_operations cpuinfo_op = {
 	.start	= c_start,
 	.next	= c_next,

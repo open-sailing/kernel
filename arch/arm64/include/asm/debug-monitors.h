@@ -90,6 +90,14 @@
 
 #define CACHE_FLUSH_IS_SAFE		1
 
+/* kprobes BRK opcodes with ESR encoding  */
+#define BRK64_ESR_MASK		0xFFFF
+#define BRK64_ESR_KPROBES	0x0004
+#define BRK64_OPCODE_KPROBES	(AARCH64_BREAK_MON | (BRK64_ESR_KPROBES << 5))
+/* uprobes BRK opcodes with ESR encoding  */
+#define BRK64_ESR_UPROBES	0x0008
+#define BRK64_OPCODE_UPROBES	(AARCH64_BREAK_MON | (BRK64_ESR_UPROBES << 5))
+
 /* AArch32 */
 #define DBG_ESR_EVT_BKPT	0x4
 #define DBG_ESR_EVT_VECC	0x5
@@ -127,28 +135,39 @@ void unregister_break_hook(struct break_hook *hook);
 
 u8 debug_monitors_arch(void);
 
-enum debug_el {
+enum debug_elx {
 	DBG_ACTIVE_EL0 = 0,
 	DBG_ACTIVE_EL1,
 };
 
-void enable_debug_monitors(enum debug_el el);
-void disable_debug_monitors(enum debug_el el);
+void enable_debug_monitors(enum debug_elx el);
+void disable_debug_monitors(enum debug_elx el);
 
 void user_rewind_single_step(struct task_struct *task);
 void user_fastforward_single_step(struct task_struct *task);
 
 void kernel_enable_single_step(struct pt_regs *regs);
-void kernel_disable_single_step(void);
+void kernel_enable_single_step_noregs(void);
+void kernel_disable_single_step(struct pt_regs *regs);
+void kernel_disable_single_step_noregs(void);
 int kernel_active_single_step(void);
 
 #ifdef CONFIG_HAVE_HW_BREAKPOINT
 int reinstall_suspended_bps(struct pt_regs *regs);
+u64 signal_toggle_single_step(void);
+void signal_reinstall_single_step(u64 pstate);
 #else
 static inline int reinstall_suspended_bps(struct pt_regs *regs)
 {
 	return -ENODEV;
 }
+
+static inline u64 signal_toggle_single_step(void)
+{
+	return 0;
+}
+
+static inline void signal_reinstall_single_step(u64 pstate) { }
 #endif
 
 int aarch32_break_handler(struct pt_regs *regs);

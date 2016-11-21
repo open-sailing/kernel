@@ -836,12 +836,43 @@ struct domain_device *sas_find_dev_by_rphy(struct sas_rphy *rphy)
 		spin_lock(&port->dev_list_lock);
 		list_for_each_entry(dev, &port->dev_list, dev_list_node) {
 			if (rphy == dev->rphy) {
+				if (test_bit(SAS_DEV_GONE, &dev->state)
+					|| test_bit(SAS_DEV_PROBE_FAIL,
+						&dev->state)
+					|| test_bit(SAS_DEV_DESTROY,
+						&dev->state)) {
+					SAS_DPRINTK(
+					"%s, ignore device %llx state %lx\n",
+					 __func__, SAS_ADDR(dev->sas_addr),
+					 dev->state);
+					continue;
+				}
+
 				found_dev = dev;
 				spin_unlock(&port->dev_list_lock);
 				goto found;
 			}
 		}
 		spin_unlock(&port->dev_list_lock);
+
+		list_for_each_entry(dev, &port->expander_list, dev_list_node) {
+			if (rphy == dev->rphy) {
+				if (test_bit(SAS_DEV_GONE, &dev->state)
+					|| test_bit(SAS_DEV_PROBE_FAIL,
+						&dev->state)
+					|| test_bit(SAS_DEV_DESTROY,
+						&dev->state)) {
+					SAS_DPRINTK(
+					"%s, ignore device %llx state %lx\n",
+					 __func__, SAS_ADDR(dev->sas_addr),
+					 dev->state);
+					continue;
+				}
+
+				found_dev = dev;
+				goto found;
+			}
+		}
 	}
  found:
 	spin_unlock_irqrestore(&ha->phy_port_lock, flags);

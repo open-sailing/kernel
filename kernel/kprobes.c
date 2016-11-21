@@ -1615,6 +1615,7 @@ static int __unregister_kprobe_top(struct kprobe *p)
 		 */
 		goto disarmed;
 	else {
+		synchronize_sched();
 		/* If disabling probe has special handlers, update aggrprobe */
 		if (p->break_handler && !kprobe_gone(p))
 			ap->break_handler = NULL;

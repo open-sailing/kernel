@@ -75,6 +75,50 @@ static bool arch_timer_mem_use_virtual;
  * Architected system timer support.
  */
 
+#ifdef CONFIG_HISI_ERRATUM_TOTEM_V2
+bool arch_timer_read_ool_enabled = false;
+EXPORT_SYMBOL_GPL(arch_timer_read_ool_enabled);
+
+/*
+ * __always_inline is used to ensure that func() is not an actual function
+ * pointer, which would result in the register accesses potentially being too
+ * far apart for the loop to work.
+ */
+static __always_inline u64 arch_timer_reread(u64 (*func)(void))
+{
+	u64 cval_old, cval_new;
+	int timeout = 200;
+
+	do {
+		isb();
+		cval_old = func();
+		cval_new = func();
+		timeout--;
+	} while (((cval_new - cval_old) >> 2) && timeout);
+
+	WARN_ON_ONCE(!timeout);
+
+	return cval_new;
+}
+
+u64 arch_counter_get_cntvct_ool(void)
+{
+	return arch_timer_reread(__arch_counter_get_cntvct);
+}
+EXPORT_SYMBOL_GPL(arch_counter_get_cntvct_ool);
+
+u64 arch_timer_get_vtval_ool(void)
+{
+	return arch_timer_reread(__arch_timer_get_vtval);
+}
+
+u64 arch_timer_get_ptval_ool(void)
+{
+	return arch_timer_reread(__arch_timer_get_ptval);
+}
+
+#endif /* CONFIG_HISI_ERRATUM_TOTEM_V2 */
+
 static __always_inline
 void arch_timer_reg_write(int access, enum arch_timer_reg reg, u32 val,
 			  struct clock_event_device *clk)
@@ -232,6 +276,50 @@ static __always_inline void set_next_event(const int access, unsigned long evt,
 	arch_timer_reg_write(access, ARCH_TIMER_REG_CTRL, ctrl, clk);
 }
 
+#ifdef CONFIG_HISI_ERRATUM_TOTEM_V2
+static __always_inline void rewrite_tval(const int access,
+		unsigned long evt, struct clock_event_device *clk)
+{
+	u64 cval_old, cval_new;
+	int timeout = 200;
+
+	do {
+		arch_timer_reg_write(access, ARCH_TIMER_REG_TVAL, evt, clk);
+		cval_old = __arch_timer_get_pcval();
+		cval_new = __arch_counter_get_cntvct() + evt;
+		timeout--;
+	} while ((cval_new - cval_old) >> 3 && timeout);
+
+	WARN_ON_ONCE(!timeout);
+}
+
+static __always_inline void set_next_event_errata(const int access,
+		unsigned long evt, struct clock_event_device *clk)
+{
+	unsigned long ctrl;
+
+	ctrl = arch_timer_reg_read(access, ARCH_TIMER_REG_CTRL, clk);
+	ctrl |= ARCH_TIMER_CTRL_ENABLE;
+	ctrl &= ~ARCH_TIMER_CTRL_IT_MASK;
+	rewrite_tval(access, evt, clk);
+	arch_timer_reg_write(access, ARCH_TIMER_REG_CTRL, ctrl, clk);
+}
+
+static int arch_timer_set_next_event_virt_errata(unsigned long evt,
+						 struct clock_event_device *clk)
+{
+	set_next_event_errata(ARCH_TIMER_VIRT_ACCESS, evt, clk);
+	return 0;
+}
+
+static int arch_timer_set_next_event_phys_errata(unsigned long evt,
+						 struct clock_event_device *clk)
+{
+	set_next_event_errata(ARCH_TIMER_PHYS_ACCESS, evt, clk);
+	return 0;
+}
+#endif /* CONFIG_HISI_ERRATUM_TOTEM_V2 */
+
 static int arch_timer_set_next_event_virt(unsigned long evt,
 					  struct clock_event_device *clk)
 {
@@ -275,10 +363,20 @@ static void __arch_timer_setup(unsigned type,
 			clk->irq = arch_timer_ppi[VIRT_PPI];
 			clk->set_mode = arch_timer_set_mode_virt;
 			clk->set_next_event = arch_timer_set_next_event_virt;
+#ifdef CONFIG_HISI_ERRATUM_TOTEM_V2
+			if (unlikely(arch_timer_read_ool_enabled))
+				clk->set_next_event =
+					arch_timer_set_next_event_virt_errata;
+#endif
 		} else {
 			clk->irq = arch_timer_ppi[PHYS_SECURE_PPI];
 			clk->set_mode = arch_timer_set_mode_phys;
 			clk->set_next_event = arch_timer_set_next_event_phys;
+#ifdef CONFIG_HISI_ERRATUM_TOTEM_V2
+			if (unlikely(arch_timer_read_ool_enabled))
+				clk->set_next_event =
+					arch_timer_set_next_event_phys_errata;
+#endif
 		}
 	} else {
 		clk->features |= CLOCK_EVT_FEAT_DYNIRQ;
@@ -311,7 +409,7 @@ static void arch_timer_evtstrm_enable(int divider)
 			| ARCH_TIMER_VIRT_EVT_EN;
 	arch_timer_set_cntkctl(cntkctl);
 	elf_hwcap |= HWCAP_EVTSTRM;
-#ifdef CONFIG_COMPAT
+#ifdef CONFIG_AARCH32_EL0
 	compat_elf_hwcap |= COMPAT_HWCAP_EVTSTRM;
 #endif
 }
@@ -737,6 +835,10 @@ static void __init arch_timer_of_init(struct device_node *np)
 
 	arch_timer_c3stop = !of_property_read_bool(np, "always-on");
 
+#ifdef CONFIG_HISI_ERRATUM_TOTEM_V2
+	if (of_property_read_bool(np, "hisi,erratum-totem-v2"))
+		arch_timer_read_ool_enabled = true;
+#endif
 	/*
 	 * If we cannot rely on firmware initializing the timer registers then
 	 * we should use the physical timers instead.

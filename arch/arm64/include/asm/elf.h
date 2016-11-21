@@ -16,6 +16,7 @@
 #ifndef __ASM_ELF_H
 #define __ASM_ELF_H
 
+#include <linux/compat.h>
 #include <asm/hwcap.h>
 
 /*
@@ -134,7 +135,11 @@ typedef struct user_fpsimd_state elf_fpregset_t;
  */
 #define ELF_PLAT_INIT(_r, load_addr)	(_r)->regs[0] = 0
 
-#define SET_PERSONALITY(ex)		clear_thread_flag(TIF_32BIT);
+#define SET_PERSONALITY(ex)		\
+do {						\
+	clear_thread_flag(TIF_32BIT_AARCH64);	\
+	clear_thread_flag(TIF_32BIT);		\
+} while (0)
 
 #define ARCH_DLINFO							\
 do {									\
@@ -148,41 +153,18 @@ extern int arch_setup_additional_pages(struct linux_binprm *bprm,
 				       int uses_interp);
 
 /* 1GB of VA */
-#ifdef CONFIG_COMPAT
-#define STACK_RND_MASK			(test_thread_flag(TIF_32BIT) ? \
-						0x7ff >> (PAGE_SHIFT - 12) : \
-						0x3ffff >> (PAGE_SHIFT - 12))
-#else
-#define STACK_RND_MASK			(0x3ffff >> (PAGE_SHIFT - 12))
-#endif
+#define STACK_RND_MASK		(is_compat_task() ? \
+					0x7ff >> (PAGE_SHIFT - 12) : \
+					0x3ffff >> (PAGE_SHIFT - 12))
 
 #ifdef CONFIG_COMPAT
 
-#ifdef __AARCH64EB__
-#define COMPAT_ELF_PLATFORM		("v8b")
-#else
-#define COMPAT_ELF_PLATFORM		("v8l")
-#endif
-
-#define COMPAT_ELF_ET_DYN_BASE		(2 * TASK_SIZE_32 / 3)
+#define COMPAT_ELF_ET_DYN_BASE	(2 * TASK_SIZE_32 / 3)
 
 /* AArch32 registers. */
-#define COMPAT_ELF_NGREG		18
-typedef unsigned int			compat_elf_greg_t;
-typedef compat_elf_greg_t		compat_elf_gregset_t[COMPAT_ELF_NGREG];
-
-/* AArch32 EABI. */
-#define EF_ARM_EABI_MASK		0xff000000
-#define compat_elf_check_arch(x)	(((x)->e_machine == EM_ARM) && \
-					 ((x)->e_flags & EF_ARM_EABI_MASK))
-
-#define compat_start_thread		compat_start_thread
-#define COMPAT_SET_PERSONALITY(ex)	set_thread_flag(TIF_32BIT);
-#define COMPAT_ARCH_DLINFO
-extern int aarch32_setup_vectors_page(struct linux_binprm *bprm,
-				      int uses_interp);
-#define compat_arch_setup_additional_pages \
-					aarch32_setup_vectors_page
+#define COMPAT_ELF_NGREG	18
+typedef unsigned int		compat_a32_elf_greg_t;
+typedef compat_a32_elf_greg_t	compat_a32_elf_gregset_t[COMPAT_ELF_NGREG];
 
 #endif /* CONFIG_COMPAT */
 

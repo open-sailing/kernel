@@ -100,13 +100,21 @@ static inline void vcpu_set_thumb(struct kvm_vcpu *vcpu)
 }
 
 /*
- * vcpu_reg should always be passed a register number coming from a
- * read of ESR_EL2. Otherwise, it may give the wrong result on AArch32
- * with banked registers.
+ * vcpu_get_reg and vcpu_set_reg should always be passed a register number
+ * coming from a read of ESR_EL2. Otherwise, it may give the wrong result on
+ * AArch32 with banked registers.
  */
-static inline unsigned long *vcpu_reg(const struct kvm_vcpu *vcpu, u8 reg_num)
+static inline unsigned long vcpu_get_reg(const struct kvm_vcpu *vcpu,
+					 u8 reg_num)
 {
-	return (unsigned long *)&vcpu_gp_regs(vcpu)->regs.regs[reg_num];
+	return (reg_num == 31) ? 0 : vcpu_gp_regs(vcpu)->regs.regs[reg_num];
+}
+
+static inline void vcpu_set_reg(struct kvm_vcpu *vcpu, u8 reg_num,
+				unsigned long val)
+{
+	if (reg_num != 31)
+		vcpu_gp_regs(vcpu)->regs.regs[reg_num] = val;
 }
 
 /* Get vcpu SPSR for current mode */
@@ -120,10 +128,14 @@ static inline unsigned long *vcpu_spsr(const struct kvm_vcpu *vcpu)
 
 static inline bool vcpu_mode_priv(const struct kvm_vcpu *vcpu)
 {
-	u32 mode = *vcpu_cpsr(vcpu) & PSR_MODE_MASK;
+	u32 mode;
 
-	if (vcpu_mode_is_32bit(vcpu))
+	if (vcpu_mode_is_32bit(vcpu)) {
+		mode = *vcpu_cpsr(vcpu) & COMPAT_PSR_MODE_MASK;
 		return mode > COMPAT_PSR_MODE_USR;
+	}
+
+	mode = *vcpu_cpsr(vcpu) & PSR_MODE_MASK;
 
 	return mode != PSR_MODE_EL0t;
 }

@@ -246,9 +246,10 @@ static void sas_set_ex_phy(struct domain_device *dev, int phy_id, void *rsp)
 			goto out;
 	}
 
-	phy->attached_dev_type = to_dev_type(dr);
 	if (test_bit(SAS_HA_ATA_EH_ACTIVE, &ha->state))
 		goto out;
+
+	phy->attached_dev_type = to_dev_type(dr);
 	phy->phy_id = phy_id;
 	phy->linkrate = dr->linkrate;
 	phy->attached_sata_host = dr->attached_sata_host;
@@ -643,9 +644,29 @@ static int sas_dev_present_in_domain(struct asd_sas_port *port,
 	if (SAS_ADDR(port->sas_addr) == SAS_ADDR(sas_addr))
 		return 1;
 	list_for_each_entry(dev, &port->dev_list, dev_list_node) {
-		if (SAS_ADDR(dev->sas_addr) == SAS_ADDR(sas_addr))
+		if (SAS_ADDR(dev->sas_addr) == SAS_ADDR(sas_addr)) {
+			/* ignore the device that has been gone */
+			if (test_bit(SAS_DEV_GONE, &dev->state)
+			  || test_bit(SAS_DEV_PROBE_FAIL, &dev->state)
+			  || test_bit(SAS_DEV_DESTROY, &dev->state))
+				continue;
+
 			return 1;
+		}
 	}
+
+	list_for_each_entry(dev, &port->expander_list, dev_list_node) {
+		if (SAS_ADDR(dev->sas_addr) == SAS_ADDR(sas_addr)) {
+			/* ignore the device that has been gone */
+			if (test_bit(SAS_DEV_GONE, &dev->state)
+			  || test_bit(SAS_DEV_PROBE_FAIL, &dev->state)
+			  || test_bit(SAS_DEV_DESTROY, &dev->state))
+				continue;
+
+			return 1;
+		}
+	}
+
 	return 0;
 }
 
@@ -658,6 +679,9 @@ int sas_smp_get_phy_events(struct sas_phy *phy)
 	u8 *resp;
 	struct sas_rphy *rphy = dev_to_rphy(phy->dev.parent);
 	struct domain_device *dev = sas_find_dev_by_rphy(rphy);
+
+	if (!dev)
+		return -ENODEV;
 
 	req = alloc_smp_req(RPEL_REQ_SIZE);
 	if (!req)
@@ -792,7 +816,7 @@ static struct domain_device *sas_ex_discover_end_dev(
 	memcpy(child->sas_addr, phy->attached_sas_addr, SAS_ADDR_SIZE);
 	sas_hash_addr(child->hashed_sas_addr, child->sas_addr);
 	if (!phy->port) {
-		phy->port = sas_port_alloc(&parent->rphy->dev, phy_id);
+		phy->port = sas_port_alloc_num(&parent->rphy->dev);
 		if (unlikely(!phy->port))
 			goto out_err;
 		if (unlikely(sas_port_add(phy->port) != 0)) {
@@ -868,9 +892,6 @@ static struct domain_device *sas_ex_discover_end_dev(
  out_list_del:
 	sas_rphy_free(child->rphy);
 	list_del(&child->disco_list_node);
-	spin_lock_irq(&parent->port->dev_list_lock);
-	list_del(&child->dev_list_node);
-	spin_unlock_irq(&parent->port->dev_list_lock);
  out_free:
 	sas_port_delete(phy->port);
  out_err:
@@ -926,7 +947,7 @@ static struct domain_device *sas_ex_discover_expander(
 	if (!child)
 		return NULL;
 
-	phy->port = sas_port_alloc(&parent->rphy->dev, phy_id);
+	phy->port = sas_port_alloc_num(&parent->rphy->dev);
 	/* FIXME: better error handling */
 	BUG_ON(sas_port_add(phy->port) != 0);
 
@@ -964,16 +985,12 @@ static struct domain_device *sas_ex_discover_expander(
 	sas_fill_in_rphy(child, rphy);
 	sas_rphy_add(rphy);
 
-	spin_lock_irq(&parent->port->dev_list_lock);
-	list_add_tail(&child->dev_list_node, &parent->port->dev_list);
-	spin_unlock_irq(&parent->port->dev_list_lock);
+	list_add_tail(&child->dev_list_node, &parent->port->expander_list);
 
 	res = sas_discover_expander(child);
 	if (res) {
 		sas_rphy_delete(rphy);
-		spin_lock_irq(&parent->port->dev_list_lock);
 		list_del(&child->dev_list_node);
-		spin_unlock_irq(&parent->port->dev_list_lock);
 		sas_put_device(child);
 		return NULL;
 	}
@@ -996,12 +1013,16 @@ static int sas_ex_discover_dev(struct domain_device *dev, int phy_id)
 			return res;
 	}
 
+	if (!SAS_ADDR(ex_phy->attached_sas_addr))
+		return 0;
+
 	/* Parent and domain coherency */
 	if (!dev->parent && (SAS_ADDR(ex_phy->attached_sas_addr) ==
 			     SAS_ADDR(dev->port->sas_addr))) {
 		sas_add_parent_port(dev, phy_id);
 		return 0;
 	}
+
 	if (dev->parent && (SAS_ADDR(ex_phy->attached_sas_addr) ==
 			    SAS_ADDR(dev->parent->sas_addr))) {
 		sas_add_parent_port(dev, phy_id);
@@ -1010,8 +1031,10 @@ static int sas_ex_discover_dev(struct domain_device *dev, int phy_id)
 		return 0;
 	}
 
-	if (sas_dev_present_in_domain(dev->port, ex_phy->attached_sas_addr))
+	if (sas_dev_present_in_domain(dev->port, ex_phy->attached_sas_addr)) {
 		sas_ex_disable_port(dev, ex_phy->attached_sas_addr);
+		return 0;
+	}
 
 	if (ex_phy->attached_dev_type == SAS_PHY_UNUSED) {
 		if (ex_phy->routing_attr == DIRECT_ROUTING) {
@@ -1130,6 +1153,11 @@ static int sas_check_level_subtractive_boundary(struct domain_device *dev)
 	u8 sub_addr[8] = {0, };
 
 	list_for_each_entry(child, &ex->children, siblings) {
+		if (test_bit(SAS_DEV_GONE, &child->state)
+		  || test_bit(SAS_DEV_PROBE_FAIL, &child->state)
+		  || test_bit(SAS_DEV_DESTROY, &child->state))
+			continue;
+
 		if (child->dev_type != SAS_EDGE_EXPANDER_DEVICE &&
 		    child->dev_type != SAS_FANOUT_EXPANDER_DEVICE)
 			continue;
@@ -1618,7 +1646,7 @@ static int sas_ex_level_discovery(struct asd_sas_port *port, const int level)
 	int res = 0;
 	struct domain_device *dev;
 
-	list_for_each_entry(dev, &port->dev_list, dev_list_node) {
+	list_for_each_entry(dev, &port->expander_list, dev_list_node) {
 		if (dev->dev_type == SAS_EDGE_EXPANDER_DEVICE ||
 		    dev->dev_type == SAS_FANOUT_EXPANDER_DEVICE) {
 			struct sas_expander_device *ex =
@@ -1849,6 +1877,10 @@ static int sas_find_bcast_dev(struct domain_device *dev,
 			SAS_DPRINTK("Expander phys DID NOT change\n");
 	}
 	list_for_each_entry(ch, &ex->children, siblings) {
+		if (test_bit(SAS_DEV_GONE, &ch->state)
+		  || test_bit(SAS_DEV_PROBE_FAIL, &ch->state)
+		  || test_bit(SAS_DEV_DESTROY, &ch->state))
+			continue;
 		if (ch->dev_type == SAS_EDGE_EXPANDER_DEVICE || ch->dev_type == SAS_FANOUT_EXPANDER_DEVICE) {
 			res = sas_find_bcast_dev(ch, src_dev);
 			if (*src_dev)
@@ -1865,6 +1897,10 @@ static void sas_unregister_ex_tree(struct asd_sas_port *port, struct domain_devi
 	struct domain_device *child, *n;
 
 	list_for_each_entry_safe(child, n, &ex->children, siblings) {
+		if (test_bit(SAS_DEV_GONE, &child->state)
+		  || test_bit(SAS_DEV_PROBE_FAIL, &child->state)
+		  || test_bit(SAS_DEV_DESTROY, &child->state))
+			continue;
 		set_bit(SAS_DEV_GONE, &child->state);
 		if (child->dev_type == SAS_EDGE_EXPANDER_DEVICE ||
 		    child->dev_type == SAS_FANOUT_EXPANDER_DEVICE)
@@ -1884,6 +1920,11 @@ static void sas_unregister_devs_sas_addr(struct domain_device *parent,
 	if (last) {
 		list_for_each_entry_safe(child, n,
 			&ex_dev->children, siblings) {
+			if (test_bit(SAS_DEV_GONE, &child->state)
+			  || test_bit(SAS_DEV_PROBE_FAIL, &child->state)
+			  || test_bit(SAS_DEV_DESTROY, &child->state))
+				continue;
+
 			if (SAS_ADDR(child->sas_addr) ==
 			    SAS_ADDR(phy->attached_sas_addr)) {
 				set_bit(SAS_DEV_GONE, &child->state);
@@ -1902,8 +1943,6 @@ static void sas_unregister_devs_sas_addr(struct domain_device *parent,
 	if (phy->port) {
 		sas_port_delete_phy(phy->port, phy->phy);
 		sas_device_set_phy(found, phy->port);
-		if (phy->port->num_phys == 0)
-			sas_port_delete(phy->port);
 		phy->port = NULL;
 	}
 }
@@ -1916,6 +1955,11 @@ static int sas_discover_bfs_by_root_level(struct domain_device *root,
 	int res = 0;
 
 	list_for_each_entry(child, &ex_root->children, siblings) {
+		if (test_bit(SAS_DEV_GONE, &child->state)
+		  || test_bit(SAS_DEV_PROBE_FAIL, &child->state)
+		  || test_bit(SAS_DEV_DESTROY, &child->state))
+			continue;
+
 		if (child->dev_type == SAS_EDGE_EXPANDER_DEVICE ||
 		    child->dev_type == SAS_FANOUT_EXPANDER_DEVICE) {
 			struct sas_expander_device *ex =
@@ -1968,6 +2012,11 @@ static int sas_discover_new(struct domain_device *dev, int phy_id)
 	if (res)
 		return res;
 	list_for_each_entry(child, &dev->ex_dev.children, siblings) {
+		if (test_bit(SAS_DEV_GONE, &child->state)
+		  || test_bit(SAS_DEV_PROBE_FAIL, &child->state)
+		  || test_bit(SAS_DEV_DESTROY, &child->state))
+			continue;
+
 		if (SAS_ADDR(child->sas_addr) ==
 		    SAS_ADDR(ex_phy->attached_sas_addr)) {
 			if (child->dev_type == SAS_EDGE_EXPANDER_DEVICE ||

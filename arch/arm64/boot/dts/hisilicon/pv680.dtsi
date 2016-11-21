@@ -1,0 +1,222 @@
+/**
+ * dts file for Hisilicon PhosphorPv680 Soc
+ *
+ * Copyright (C) 2016 Hisilicon Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * publishhed by the Free Software Foundation.
+ *
+ */
+
+/ {
+	compatible = "hisilicon,pv680";
+	#address-cells = <2>;
+	#size-cells = <2>;
+	interrupt-parent = <&gic>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20000>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@1 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20001>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@2 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20002>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@3 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20003>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@4 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20100>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@5 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20101>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@6 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20102>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@7 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20103>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@8 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20200>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@9 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20201>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@10 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20202>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@11 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20203>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@12 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20300>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@13 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20301>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@14 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20302>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@15 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20303>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+	};
+
+	gic: interrupt-controller@f0000000 {
+		compatible = "arm,gic-v3";
+		#interrupt-cells = <3>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		interrupt-controller;
+		#redistributor-regions = <1>;
+		redistributor-stride = <0x0 0x40000>;
+		reg = <0x0 0xf0000000 0x0 0x10000>,	/* GICD */
+		      <0x0 0xf0100000 0x0 0x400000>,	/* GICR */
+		      <0x0 0xfe000000 0x0 0x10000>,	/* GICC */
+		      <0x0 0xfe010000 0x0 0x10000>,     /* GICH */
+		      <0x0 0xfe020000 0x0 0x10000>;     /* GICV */
+		interrupts = <1 9 0xff04>;
+
+		its: interrupt-controller@f4900000 {
+			compatible = "arm,gic-v3-its";
+			msi-controller;
+			#msi-cells = <1>;
+			reg = <0x0 0xf4900000 0x0 0x1000000>;
+		};
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupts = <1 13 0xff08>,
+			     <1 14 0xff08>,
+			     <1 11 0xff08>,
+			     <1 10 0xff08>;
+	};
+
+	pmu {
+		compatible = "arm,armv8-pmuv3";
+		interrupts = <1 7 4>;
+	};
+
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		mbigen_peri: interrupt-controller@f1080000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its>;
+			interrupt-controller;
+			#interrupt-cells = <4>;
+			reg = <0x0 0xf1080000 0x0 0x10000>;
+		};
+
+		refclk200M: refclk200M {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <200000000>;
+			clock-output-names = "refclk";
+		};
+
+		serial0: uart@f1300000 {
+			compatible = "snps,dw-apb-uart";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x0 0xf1300000 0x0 0x10000>;
+			interrupt-parent = <&mbigen_peri>;
+			interrupts = <0x120c4 1 100 6>;
+			clocks = <&refclk200M>;
+			clock-names = "apb_pclk";
+			reg-shift = <2>;
+		};
+	};
+};

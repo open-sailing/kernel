@@ -1,0 +1,68 @@
+HiSilicon RoCE DT description
+
+HiSilicon RoCE engine is a part of network subsystem.
+It works depending on other part of network wubsytem, such as, gmac and
+dsa fabric.
+
+Additional properties are described here:
+
+Required properties:
+- compatible: Should contain "hisilicon,hns-roce-v1".
+- reg: Physical base address of the roce driver and
+length of memory mapped region.
+- eth-handle: phandle, specifies a reference to a node
+representing a ethernet device.
+- dsaf-handle: phandle, specifies a reference to a node
+representing a dsaf device.
+- #address-cells: must be 2
+- #size-cells: must be 2
+Optional properties:
+- dma-coherent: Present if DMA operations are coherent.
+- interrupt-parent: the interrupt parent of this device.
+- interrupts: should contain 32 completion event irq,1 async event irq
+and 1 event overflow irq.
+Example:
+	infiniband@c4000000 {
+			compatible = "hisilicon,hns-roce-v1";
+			reg = <0x0 0xc4000000 0x0 0x100000>;
+			dma-coherent;
+			eth-handle = <&eth2 &eth3 &eth4 &eth5 &eth6 &eth7>;
+			dsaf-handle = <&soc0_dsa>;
+			#address-cells = <2>;
+			#size-cells = <2>;
+			interrupt-parent = <&mbigen_dsa>;
+			interrupts = <0x40B1E 34 18 6>,
+					<0x40B1E 34 19 6>,
+					<0x40B1E 34 20 6>,
+					<0x40B1E 34 21 6>,
+					<0x40B1E 34 22 6>,
+					<0x40B1E 34 23 6>,
+					<0x40B1E 34 24 6>,
+					<0x40B1E 34 25 6>,
+					<0x40B1E 34 26 6>,
+					<0x40B1E 34 27 6>,
+					<0x40B1E 34 28 6>,
+					<0x40B1E 34 29 6>,
+					<0x40B1E 34 30 6>,
+					<0x40B1E 34 31 6>,
+					<0x40B1E 34 32 6>,
+					<0x40B1E 34 33 6>,
+					<0x40B1E 34 34 6>,
+					<0x40B1E 34 35 6>,
+					<0x40B1E 34 36 6>,
+					<0x40B1E 34 37 6>,
+					<0x40B1E 34 38 6>,
+					<0x40B1E 34 39 6>,
+					<0x40B1E 34 40 6>,
+					<0x40B1E 34 41 6>,
+					<0x40B1E 34 42 6>,
+					<0x40B1E 34 43 6>,
+					<0x40B1E 34 44 6>,
+					<0x40B1E 34 45 6>,
+					<0x40B1E 34 46 6>,
+					<0x40B1E 34 47 6>,
+					<0x40B1E 34 48 6>,
+					<0x40B1E 34 49 6>,
+					<0x40B1E 34 50 6>,
+					<0x40B1E 34 51 6>;
+		};

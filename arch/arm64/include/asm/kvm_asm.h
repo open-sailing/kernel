@@ -56,14 +56,29 @@
 #define DBGWVR15_EL1	86
 #define MDCCINT_EL1	87	/* Monitor Debug Comms Channel Interrupt Enable Reg */
 
+/* Performance Monitors Registers */
+#define PMCR_EL0	88	/* Control Register */
+#define PMOVSSET_EL0	89	/* Overflow Flag Status Set Register */
+#define PMSELR_EL0	90	/* Event Counter Selection Register */
+#define PMEVCNTR0_EL0	91	/* Event Counter Register (0-30) */
+#define PMEVCNTR30_EL0	121
+#define PMCCNTR_EL0	122	/* Cycle Counter Register */
+#define PMEVTYPER0_EL0	123	/* Event Type Register (0-30) */
+#define PMEVTYPER30_EL0	153
+#define PMCCFILTR_EL0	154	/* Cycle Count Filter Register */
+#define PMCNTENSET_EL0	155	/* Count Enable Set Register */
+#define PMINTENSET_EL1	156	/* Interrupt Enable Set Register */
+#define PMUSERENR_EL0	157	/* User Enable Register */
+#define PMSWINC_EL0	158	/* Software Increment Register */
+
 /* 32bit specific registers. Keep them at the end of the range */
-#define	DACR32_EL2	88	/* Domain Access Control Register */
-#define	IFSR32_EL2	89	/* Instruction Fault Status Register */
-#define	FPEXC32_EL2	90	/* Floating-Point Exception Control Register */
-#define	DBGVCR32_EL2	91	/* Debug Vector Catch Register */
-#define	TEECR32_EL1	92	/* ThumbEE Configuration Register */
-#define	TEEHBR32_EL1	93	/* ThumbEE Handler Base Register */
-#define	NR_SYS_REGS	94
+#define	DACR32_EL2	159	/* Domain Access Control Register */
+#define	IFSR32_EL2	160	/* Instruction Fault Status Register */
+#define	FPEXC32_EL2	161	/* Floating-Point Exception Control Register */
+#define	DBGVCR32_EL2	162	/* Debug Vector Catch Register */
+#define	TEECR32_EL1	163	/* ThumbEE Configuration Register */
+#define	TEEHBR32_EL1	164	/* ThumbEE Handler Base Register */
+#define	NR_SYS_REGS	165
 
 /* 32bit mapping */
 #define c0_MPIDR	(MPIDR_EL1 * 2)	/* MultiProcessor ID Register */
@@ -118,6 +133,7 @@ struct kvm_vcpu;
 
 extern char __kvm_hyp_init[];
 extern char __kvm_hyp_init_end[];
+extern char __kvm_hyp_reset[];
 
 extern char __kvm_hyp_vector[];
 

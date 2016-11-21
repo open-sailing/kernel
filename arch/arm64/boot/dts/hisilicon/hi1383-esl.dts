@@ -1,0 +1,30 @@
+/**
+ * dts file for Hisilicon PhosphorHi1383 ESL
+ *
+ * Copyright (C) 2016 Hisilicon Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * publishhed by the Free Software Foundation.
+ *
+ */
+
+/dts-v1/;
+
+/memreserve/ 0x00000000 0x00010000;
+/include/ "hi1383.dtsi"
+
+/ {
+	model = "Hisilicon PhosphorHi1383 ESL";
+	compatible = "hisilicon,hi1383-esl", "hisilicon,hi1383";
+
+	/* mem space: 0x0 ~ 0xe000,0000  0x2,0000,0000~0x4,0000,0000 */
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x00000000 0x0 0x40000000>; /* only use 1G here */
+	};
+
+	chosen {
+		bootargs = "rdinit=/init console=ttyS0 earlycon=uart8250,mmio32,0xf1300000 initrd=0x7000000,30M";
+	};
+};

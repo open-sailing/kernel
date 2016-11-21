@@ -458,9 +458,9 @@ int machine__process_lost_event(struct machine *machine __maybe_unused,
 	return 0;
 }
 
-static struct dso*
-machine__module_dso(struct machine *machine, struct kmod_path *m,
-		    const char *filename)
+static struct dso *machine__findnew_module_dso(struct machine *machine,
+					       struct kmod_path *m,
+					       const char *filename)
 {
 	struct dso *dso;
 
@@ -486,8 +486,26 @@ machine__module_dso(struct machine *machine, struct kmod_path *m,
 	return dso;
 }
 
-struct map *machine__new_module(struct machine *machine, u64 start,
-				const char *filename)
+static void dso__adjust_kmod_long_name(struct dso *dso, const char *filename)
+{
+	const char *dup_filename;
+
+	if (!filename || !dso || !dso->long_name)
+		return;
+	if (dso->long_name[0] != '[')
+		return;
+	if (!strchr(filename, '/'))
+		return;
+
+	dup_filename = strdup(filename);
+	if (!dup_filename)
+		return;
+
+	dso__set_long_name(dso, dup_filename, true);
+}
+
+struct map *machine__findnew_module_map(struct machine *machine, u64 start,
+					const char *filename)
 {
 	struct map *map = NULL;
 	struct dso *dso;
@@ -498,10 +516,17 @@ struct map *machine__new_module(struct machine *machine, u64 start,
 
 	map = map_groups__find_by_name(&machine->kmaps, MAP__FUNCTION,
 				       m.name);
-	if (map)
+	if (map) {
+		/*
+		 * If the map's dso is an offline module, give dso__load()
+		 * a chance to find the file path of that module by fixing
+		 * long_name.
+		 */
+		dso__adjust_kmod_long_name(map->dso, filename);
 		goto out;
+	}
 
-	dso = machine__module_dso(machine, &m, filename);
+	dso = machine__findnew_module_dso(machine, &m, filename);
 	if (dso == NULL)
 		goto out;
 
@@ -970,7 +995,7 @@ static int machine__create_module(void *arg, const char *name, u64 start)
 	struct machine *machine = arg;
 	struct map *map;
 
-	map = machine__new_module(machine, start, name);
+	map = machine__findnew_module_map(machine, start, name);
 	if (map == NULL)
 		return -1;
 
@@ -1093,8 +1118,8 @@ static int machine__process_kernel_mmap_event(struct machine *machine,
 				strlen(kmmap_prefix) - 1) == 0;
 	if (event->mmap.filename[0] == '/' ||
 	    (!is_kernel_mmap && event->mmap.filename[0] == '[')) {
-		map = machine__new_module(machine, event->mmap.start,
-					  event->mmap.filename);
+		map = machine__findnew_module_map(machine, event->mmap.start,
+						  event->mmap.filename);
 		if (map == NULL)
 			goto out_problem;
 
@@ -1110,8 +1135,27 @@ static int machine__process_kernel_mmap_event(struct machine *machine,
 		struct dso *dso;
 
 		list_for_each_entry(dso, &machine->kernel_dsos.head, node) {
-			if (is_kernel_module(dso->long_name))
+			/*
+			 * The cpumode passed to is_kernel_module is not the
+			 * cpumode of *this* event. If we insist on passing
+			 * correct cpumode to is_kernel_module, we should
+			 * record the cpumode when we adding this dso to the
+			 * linked list.
+			 *
+			 * However we don't really need passing correct
+			 * cpumode.  We know the correct cpumode must be kernel
+			 * mode (if not, we should not link it onto kernel_dsos
+			 * list).
+			 *
+			 * Therefore, we pass PERF_RECORD_MISC_CPUMODE_UNKNOWN.
+			 * is_kernel_module() treats it as a kernel cpumode.
+			 */
+
+			if (!dso->kernel ||
+			    is_kernel_module(dso->long_name,
+					     PERF_RECORD_MISC_CPUMODE_UNKNOWN))
 				continue;
+
 
 			kernel = dso;
 			break;

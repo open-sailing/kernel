@@ -90,6 +90,45 @@ int irq_set_handler_data(unsigned int irq, void *data)
 EXPORT_SYMBOL(irq_set_handler_data);
 
 /**
+ *	irq_set_mbi_desc - set MBI descriptor for an irq
+ *	@irq:	Interrupt number
+ *	@entry:	Pointer to MBI descriptor
+ */
+int irq_set_mbi_desc(unsigned int irq, struct mbi_desc *entry)
+{
+	unsigned long flags;
+	struct irq_desc *desc = irq_get_desc_lock(irq, &flags, IRQ_GET_DESC_CHECK_GLOBAL);
+
+	if (!desc)
+		return -EINVAL;
+	desc->irq_data.mbi_desc = entry;
+	irq_put_desc_unlock(desc, flags);
+	return 0;
+}
+EXPORT_SYMBOL(irq_set_mbi_desc);
+
+/**
+ *	irq_set_mbi_desc_range - set MBI descriptor for a range of irqs
+ *	@irq:	Interrupt number
+ *	@entry:	Pointer to MBI descriptor
+ *	@count:	Number of interrupts to be set
+ */
+int irq_set_mbi_desc_range(unsigned int irq, struct mbi_desc *entry,
+			   unsigned int count)
+{
+	int i, ret = 0;
+
+	for (i = 0; i < count; i++) {
+		ret = irq_set_mbi_desc(irq + i, entry);
+		if (ret)
+			break;
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL(irq_set_mbi_desc_range);
+
+/**
  *	irq_set_msi_desc_off - set MSI descriptor data for an irq at offset
  *	@irq_base:	Interrupt number base
  *	@irq_offset:	Interrupt number offset
@@ -151,6 +190,33 @@ struct irq_data *irq_get_irq_data(unsigned int irq)
 	return desc ? &desc->irq_data : NULL;
 }
 EXPORT_SYMBOL_GPL(irq_get_irq_data);
+
+/**
+ * irq_compose_mbi_msg - Compose mbi message for an irq chip
+ * @data:	Pointer to interrupt specific data
+ * @msg:	Pointer to the MBI message
+ *
+ * For hierarchical domains we find the first chip in the hierarchy
+ * which implements the irq_compose_msg callback. For non hierarchical
+ * we use the top level chip.
+ */
+int irq_compose_mbi_msg(struct irq_data *data, struct mbi_msg *msg)
+{
+	struct irq_data *pos = NULL;
+
+#ifdef	CONFIG_IRQ_DOMAIN_HIERARCHY
+	for (; data; data = data->parent_data)
+#endif
+		if (data->chip && data->chip->irq_compose_msg)
+			pos = data;
+	if (!pos)
+		return -ENOSYS;
+
+	pos->chip->irq_compose_msg(pos, msg);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(irq_compose_mbi_msg);
 
 static void irq_state_clr_disabled(struct irq_desc *desc)
 {
@@ -702,7 +768,6 @@ void handle_percpu_devid_irq(unsigned int irq, struct irq_desc *desc)
 {
 	struct irq_chip *chip = irq_desc_get_chip(desc);
 	struct irqaction *action = desc->action;
-	void *dev_id = raw_cpu_ptr(action->percpu_dev_id);
 	irqreturn_t res;
 
 	kstat_incr_irqs_this_cpu(irq, desc);
@@ -710,9 +775,20 @@ void handle_percpu_devid_irq(unsigned int irq, struct irq_desc *desc)
 	if (chip->irq_ack)
 		chip->irq_ack(&desc->irq_data);
 
-	trace_irq_handler_entry(irq, action);
-	res = action->handler(irq, dev_id);
-	trace_irq_handler_exit(irq, action, res);
+	if (likely(action)) {
+		trace_irq_handler_entry(irq, action);
+		res = action->handler(irq, raw_cpu_ptr(action->percpu_dev_id));
+		trace_irq_handler_exit(irq, action, res);
+	} else {
+		unsigned int cpu = smp_processor_id();
+		bool enabled = cpumask_test_cpu(cpu, desc->percpu_enabled);
+
+		if (enabled)
+			irq_percpu_disable(desc, cpu);
+
+		pr_err_once("Spurious%s percpu IRQ%u on CPU%u\n",
+			    enabled ? " and unmasked" : "", irq, cpu);
+	}
 
 	if (chip->irq_eoi)
 		chip->irq_eoi(&desc->irq_data);
@@ -882,7 +958,8 @@ void irq_cpu_offline(void)
 void irq_chip_ack_parent(struct irq_data *data)
 {
 	data = data->parent_data;
-	data->chip->irq_ack(data);
+	if (data->chip->irq_ack)
+		data->chip->irq_ack(data);
 }
 
 /**
@@ -892,7 +969,8 @@ void irq_chip_ack_parent(struct irq_data *data)
 void irq_chip_mask_parent(struct irq_data *data)
 {
 	data = data->parent_data;
-	data->chip->irq_mask(data);
+	if (data->chip->irq_mask)
+		data->chip->irq_mask(data);
 }
 
 /**
@@ -902,7 +980,8 @@ void irq_chip_mask_parent(struct irq_data *data)
 void irq_chip_unmask_parent(struct irq_data *data)
 {
 	data = data->parent_data;
-	data->chip->irq_unmask(data);
+	if (data->chip->irq_unmask)
+		data->chip->irq_unmask(data);
 }
 
 /**
@@ -912,7 +991,8 @@ void irq_chip_unmask_parent(struct irq_data *data)
 void irq_chip_eoi_parent(struct irq_data *data)
 {
 	data = data->parent_data;
-	data->chip->irq_eoi(data);
+	if (data->chip->irq_eoi)
+		data->chip->irq_eoi(data);
 }
 
 /**

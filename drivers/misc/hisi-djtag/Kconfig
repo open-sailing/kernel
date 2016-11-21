@@ -1,0 +1,5 @@
+config HISI_DJTAG
+        bool "hisilicon djtag r/w interface via syscon"
+	depends on ARCH_P660 || ARCH_Hi1610 || ARCH_Hi1382
+        help
+          This enables support djtag r/w for some modules.

@@ -1,0 +1,77 @@
+/ {
+	pcie@0xb0070000 {
+		compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+		reg = <0 0xb0070000 0 0x10000>, <0 0xb0000000 0 0x10000>,
+			  <0 0xb00c0000 0 0x10000>, <0 0xb3000000 0 0x2000>,
+			  <0 0xb2080000 0 0x40000>;
+		reg-names = "rc_dbi", "subctrl", "pcs", "config", "serdes";
+		bus-range = <0 63>;
+		msi-parent = <&its_pcie>;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		device_type = "pci";
+		dma-coherent;
+		ranges = <0x82000000 0 0xb3020000 0x0 0xb3020000 0 0xfe0000>,
+			<0x01000000 0x0 0x0 0x0 0xb3010000 0x0 0x10000>;
+		num-lanes = <8>;
+		port-id = <0>;
+		status = "disabled";
+	};
+
+	pcie@0xb0080000 {
+		compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+		reg = <0 0xb0080000 0 0x10000>, <0 0xb0000000 0 0x10000>,
+			  <0 0xb00d0000 0 0x10000>, <0 0xb4000000 0 0x2000>,
+			  <0 0xb2000000 0 0x40000>;
+		reg-names = "rc_dbi", "subctrl", "pcs", "config", "serdes";
+		bus-range = <64 127>;
+		msi-parent = <&its_pcie>;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		device_type = "pci";
+		dma-coherent;
+		ranges = <0x82000000 0 0xb4020000 0x0 0xb4020000 0 0xfe0000>,
+			<0x01000000 0x0 0x0 0x0 0xb4010000 0x0 0x10000>;
+		num-lanes = <8>;
+		port-id = <1>;
+		status = "ok";
+	};
+
+	pcie@0xb0090000 {
+		compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+		reg = <0 0xb0090000 0 0x10000>, <0 0xb0000000 0 0x10000>,
+			  <0 0xb00e0000 0 0x10000>, <0 0xb5000000 0 0x2000>,
+			  <0 0xb2100000 0 0x40000>;
+		reg-names = "rc_dbi", "subctrl", "pcs", "config", "serdes";
+		bus-range = <128 191>;
+		msi-parent = <&its_pcie>;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		device_type = "pci";
+		dma-coherent;
+		ranges = <0x82000000 0 0xb5020000 0x0 0xb5020000 0 0xfe0000>,
+			<0x01000000 0x0 0x0 0x0 0xb5010000 0x0 0x10000>;
+		num-lanes = <8>;
+		port-id = <2>;
+		status = "ok";
+	};
+
+	pcie@0xb00a0000 {
+		compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+		reg = <0 0xb00a0000 0 0x10000>, <0 0xb0000000 0 0x10000>,
+			  <0 0xb00f0000 0 0x10000>, <0 0xb6000000 0 0x2000>,
+			  <0 0xb2180000 0 0x40000>;
+		reg-names = "rc_dbi", "subctrl", "pcs", "config", "serdes";
+		bus-range = <192 255>;
+		msi-parent = <&its_pcie>;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		device_type = "pci";
+		dma-coherent;
+		ranges = <0x82000000 0 0xb6020000 0x0 0xb6020000 0 0xfe0000>,
+			<0x01000000 0x0 0x0 0x0 0xb6010000 0x0 0x10000>;
+		num-lanes = <4>;
+		port-id = <3>;
+		status = "disabled";
+	};
+};

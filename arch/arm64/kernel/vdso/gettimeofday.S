@@ -25,6 +25,16 @@
 #define NSEC_PER_SEC_LO16	0xca00
 #define NSEC_PER_SEC_HI16	0x3b9a
 
+#ifdef __LP64__
+#define PTR_REG(n)	x##n
+#define OFFSET(n)	n
+#define DELOUSE(n)
+#else
+#define PTR_REG(n)	w##n
+#define OFFSET(n)	COMPAT_##n
+#define DELOUSE(n)	mov     w##n, w##n
+#endif
+
 vdso_data	.req	x6
 use_syscall	.req	w7
 seqcnt		.req	w8
@@ -51,6 +61,8 @@ seqcnt		.req	w8
 /* int __kernel_gettimeofday(struct timeval *tv, struct timezone *tz); */
 ENTRY(__kernel_gettimeofday)
 	.cfi_startproc
+	DELOUSE(0)
+	DELOUSE(1)
 	mov	x2, x30
 	.cfi_register x30, x2
 
@@ -68,7 +80,7 @@ ENTRY(__kernel_gettimeofday)
 	mov	x13, #1000
 	lsl	x13, x13, x12
 	udiv	x11, x11, x13
-	stp	x10, x11, [x0, #TVAL_TV_SEC]
+	stp	PTR_REG(10), PTR_REG(11), [x0, #OFFSET(TVAL_TV_SEC)]
 2:
 	/* If tz is NULL, return 0. */
 	cbz	x1, 3f
@@ -88,6 +100,7 @@ ENDPROC(__kernel_gettimeofday)
 /* int __kernel_clock_gettime(clockid_t clock_id, struct timespec *tp); */
 ENTRY(__kernel_clock_gettime)
 	.cfi_startproc
+	DELOUSE(1)
 	cmp	w0, #CLOCK_REALTIME
 	ccmp	w0, #CLOCK_MONOTONIC, #0x4, ne
 	b.ne	2f
@@ -159,7 +172,7 @@ ENTRY(__kernel_clock_gettime)
 
 6:	/* Store to the user timespec. */
 	lsr	x11, x11, x12
-	stp	x10, x11, [x1, #TSPEC_TV_SEC]
+	stp	PTR_REG(10), PTR_REG(11), [x1, #OFFSET(TSPEC_TV_SEC)]
 	mov	x0, xzr
 	ret
 7:
@@ -174,6 +187,7 @@ ENDPROC(__kernel_clock_gettime)
 /* int __kernel_clock_getres(clockid_t clock_id, struct timespec *res); */
 ENTRY(__kernel_clock_getres)
 	.cfi_startproc
+	DELOUSE(1)
 	cmp	w0, #CLOCK_REALTIME
 	ccmp	w0, #CLOCK_MONOTONIC, #0x4, ne
 	b.ne	1f
@@ -187,7 +201,7 @@ ENTRY(__kernel_clock_getres)
 	ldr	x2, 6f
 2:
 	cbz	w1, 3f
-	stp	xzr, x2, [x1]
+	stp	PTR_REG(zr), PTR_REG(2), [x1]
 
 3:	/* res == NULL. */
 	mov	w0, wzr
@@ -207,7 +221,7 @@ ENDPROC(__kernel_clock_getres)
 /*
  * Read the current time from the architected counter.
  * Expects vdso_data to be initialised.
- * Clobbers the temporary registers (x9 - x15).
+ * Clobbers the temporary registers (x9 - x17).
  * Returns:
  *  - w9		= vDSO sequence counter
  *  - (x10, x11)	= (ts->tv_sec, shifted ts->tv_nsec)
@@ -217,6 +231,7 @@ ENTRY(__do_get_tspec)
 	.cfi_startproc
 
 	/* Read from the vDSO data page. */
+	ldr	w17, [vdso_data, #VDSO_TIMER_REREAD]
 	ldr	x10, [vdso_data, #VDSO_CS_CYCLE_LAST]
 	ldp	x13, x14, [vdso_data, #VDSO_XTIME_CLK_SEC]
 	ldp	w11, w12, [vdso_data, #VDSO_CS_MULT]
@@ -226,6 +241,16 @@ ENTRY(__do_get_tspec)
 	isb
 	mrs	x15, cntvct_el0
 
+	cmp	w17, #0
+	b.eq	2f
+1:
+	mov	x3, x15
+	isb
+	mrs	x15, cntvct_el0
+	sub	x3, x15, x3
+	lsr	x3, x3, #2
+	cbnz	x3, 1b
+2:
 	/* Calculate cycle delta and convert to ns. */
 	sub	x10, x15, x10
 	/* We can only guarantee 56 bits of precision. */

@@ -1124,6 +1124,9 @@ EXPORT_SYMBOL(would_dump);
 
 void setup_new_exec(struct linux_binprm * bprm)
 {
+	/* set the address limit for the new executable */
+	set_fs(USER_DS);
+
 	arch_pick_mmap_layout(current->mm);
 
 	/* This is the point of no return */

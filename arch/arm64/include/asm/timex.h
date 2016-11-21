@@ -17,12 +17,18 @@
 #define __ASM_TIMEX_H
 
 #include <asm/arch_timer.h>
+#include <linux/math64.h>
 
 /*
  * Use the current timer as a cycle counter since this is what we use for
  * the delay loop.
  */
 #define get_cycles()	arch_counter_get_cntvct()
+
+static inline u64 __cycles_2_ns(u64 cyc)
+{
+	return mul_u64_u32_div(cyc, NSEC_PER_SEC, arch_timer_get_cntfrq());
+}
 
 #include <asm-generic/timex.h>
 

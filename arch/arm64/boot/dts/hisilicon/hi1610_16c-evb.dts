@@ -1,0 +1,82 @@
+/**
+ * dts file for Hisilicon Hi1610 16c EVB
+ *
+ * Copyright (C) 2014,2015 Hisilicon Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * publishhed by the Free Software Foundation.
+ *
+ */
+
+/dts-v1/;
+
+/memreserve/ 0x00000000 0x00010000;
+/include/ "hi1610_16c.dtsi"
+/include/ "hi1610_hns_evb.dtsi"
+/include/ "hi1610_pcie_evb.dtsi"
+/include/ "hi1610_sas_evb.dtsi"
+/ {
+	model = "Hisilicon Hi1610 16core Evaluation Board";
+	compatible = "hisilicon,hi1610_16c-EVB", "hisilicon,hi1610";
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x00000000 0x0 0x3c000000>;
+	};
+
+	chosen {
+		bootargs = "rdinit=/init console=ttyS0,115200 earlycon=uart8250,mmio32,0x60300000 pci=pcie_bus_perf pcie_aspm=off";
+		linux,initrd-start = <0x7000000>;
+		linux,initrd-end = <0x20000000>;
+	};
+};
+
+
+/*
+They hi1610 evb has 7 Hilink:
+Hilink0 : used for PCIE1 or PCIE2 or SAS2;
+Hilink1 : used for PCIE0 or SAS2;
+Hilink2 : used for PCIE2 or SAS0;
+Hilink3 : used for GE4~7 or XGE4~7;
+Hilink4 : used for GE0~3 or XGE0~3;
+Hilink5 : used for PCIE3 or PCIE2 or SAS1;
+Hilink6 : used for SAS1 or SAS2;
+
+The configuration of hilink can be mapped and set in BIOS, and the
+status of PCIE and SAS below must fit with the mapping relationship.
+The BIOS which used for chip verification is:
+Hilink0 : PCIE1 8 lane
+Hilink1 : PCIE0 8 lane
+Hilink2 : SAS0 8 lane
+Hilink5 : SAS1 4 lane
+Hilink6 : SAS2 4 lane
+*/
+
+&pcie0 {
+	status = "ok";
+};
+
+&pcie1 {
+	status = "ok";
+};
+
+&pcie2 {
+	status = "disable";
+};
+
+&pcie3 {
+	status = "disable";
+};
+
+&sas0 {
+	status = "ok";
+};
+
+&sas1 {
+	status = "ok";
+};
+
+&sas2 {
+	status = "ok";
+};

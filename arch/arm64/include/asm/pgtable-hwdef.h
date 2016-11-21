@@ -16,6 +16,12 @@
 #ifndef __ASM_PGTABLE_HWDEF_H
 #define __ASM_PGTABLE_HWDEF_H
 
+#ifdef CONFIG_MM_OUTTER_SHAREABLE
+#define SH_DOMAIN	       2       /* outer shareable */
+#else
+#define SH_DOMAIN	       3       /* inner shareable */
+#endif
+
 #define PTRS_PER_PTE		(1 << (PAGE_SHIFT - 3))
 
 /*
@@ -79,7 +85,7 @@
 #define PMD_SECT_VALID		(_AT(pmdval_t, 1) << 0)
 #define PMD_SECT_USER		(_AT(pmdval_t, 1) << 6)		/* AP[1] */
 #define PMD_SECT_RDONLY		(_AT(pmdval_t, 1) << 7)		/* AP[2] */
-#define PMD_SECT_S		(_AT(pmdval_t, 3) << 8)
+#define PMD_SECT_S		(_AT(pmdval_t, SH_DOMAIN) << 8)
 #define PMD_SECT_AF		(_AT(pmdval_t, 1) << 10)
 #define PMD_SECT_NG		(_AT(pmdval_t, 1) << 11)
 #define PMD_SECT_PXN		(_AT(pmdval_t, 1) << 53)
@@ -100,9 +106,10 @@
 #define PTE_TABLE_BIT		(_AT(pteval_t, 1) << 1)
 #define PTE_USER		(_AT(pteval_t, 1) << 6)		/* AP[1] */
 #define PTE_RDONLY		(_AT(pteval_t, 1) << 7)		/* AP[2] */
-#define PTE_SHARED		(_AT(pteval_t, 3) << 8)		/* SH[1:0], inner shareable */
+#define PTE_SHARED		(_AT(pteval_t, SH_DOMAIN) << 8) /* SH[1:0] */
 #define PTE_AF			(_AT(pteval_t, 1) << 10)	/* Access Flag */
 #define PTE_NG			(_AT(pteval_t, 1) << 11)	/* nG */
+#define PTE_DBM			(_AT(pteval_t, 1) << 51)	/* Dirty Bit Management */
 #define PTE_PXN			(_AT(pteval_t, 1) << 53)	/* Privileged XN */
 #define PTE_UXN			(_AT(pteval_t, 1) << 54)	/* User XN */
 
@@ -158,7 +165,7 @@
 #define TCR_ORGN_WT		((UL(2) << 10) | (UL(2) << 26))
 #define TCR_ORGN_WBnWA		((UL(3) << 10) | (UL(3) << 26))
 #define TCR_ORGN_MASK		((UL(3) << 10) | (UL(3) << 26))
-#define TCR_SHARED		((UL(3) << 12) | (UL(3) << 28))
+#define TCR_SHARED		((UL(SH_DOMAIN) << 12) | (UL(SH_DOMAIN) << 28))
 #define TCR_TG0_4K		(UL(0) << 14)
 #define TCR_TG0_64K		(UL(1) << 14)
 #define TCR_TG0_16K		(UL(2) << 14)
@@ -167,5 +174,7 @@
 #define TCR_TG1_64K		(UL(3) << 30)
 #define TCR_ASID16		(UL(1) << 36)
 #define TCR_TBI0		(UL(1) << 37)
+#define TCR_HA			(UL(1) << 39)
+#define TCR_HD			(UL(1) << 40)
 
 #endif

@@ -783,6 +783,7 @@ static void free_arg(struct print_arg *arg)
 		free(arg->bitmask.bitmask);
 		break;
 	case PRINT_DYNAMIC_ARRAY:
+	case PRINT_DYNAMIC_ARRAY_LEN:
 		free(arg->dynarray.index);
 		break;
 	case PRINT_OP:
@@ -1680,6 +1681,9 @@ process_cond(struct event_format *event, struct print_arg *top, char **tok)
 	type = process_arg(event, left, &token);
 
  again:
+	if (type == EVENT_ERROR)
+		goto out_free;
+
 	/* Handle other operations in the arguments */
 	if (type == EVENT_OP && strcmp(token, ":") != 0) {
 		type = process_op(event, left, &token);
@@ -1939,6 +1943,12 @@ process_op(struct event_format *event, struct print_arg *arg, char **tok)
 			goto out_warn_free;
 
 		type = process_arg_token(event, right, tok, type);
+		if (type == EVENT_ERROR) {
+                       free_arg(right);
+                       /* token was freed in process_arg_token() via *tok */
+                       token = NULL;
+                       goto out_free;
+               }
 
 		if (right->type == PRINT_OP &&
 		    get_op_prio(arg->op.op) < get_op_prio(right->op.op)) {
@@ -2655,6 +2665,42 @@ process_dynamic_array(struct event_format *event, struct print_arg *arg, char **
 }
 
 static enum event_type
+process_dynamic_array_len(struct event_format *event, struct print_arg *arg,
+			  char **tok)
+{
+	struct format_field *field;
+	enum event_type type;
+	char *token;
+
+	if (read_expect_type(EVENT_ITEM, &token) < 0)
+		goto out_free;
+
+	arg->type = PRINT_DYNAMIC_ARRAY_LEN;
+
+	/* Find the field */
+	field = pevent_find_field(event, token);
+	if (!field)
+		goto out_free;
+
+	arg->dynarray.field = field;
+	arg->dynarray.index = 0;
+
+	if (read_expected(EVENT_DELIM, ")") < 0)
+		goto out_err;
+
+	type = read_token(&token);
+	*tok = token;
+
+	return type;
+
+ out_free:
+	free_token(token);
+ out_err:
+	*tok = NULL;
+	return EVENT_ERROR;
+}
+
+static enum event_type
 process_paren(struct event_format *event, struct print_arg *arg, char **tok)
 {
 	struct print_arg *item_arg;
@@ -2900,6 +2946,10 @@ process_function(struct event_format *event, struct print_arg *arg,
 	if (strcmp(token, "__get_dynamic_array") == 0) {
 		free_token(token);
 		return process_dynamic_array(event, arg, tok);
+	}
+	if (strcmp(token, "__get_dynamic_array_len") == 0) {
+		free_token(token);
+		return process_dynamic_array_len(event, arg, tok);
 	}
 
 	func = find_func_handler(event->pevent, token);
@@ -3581,14 +3631,25 @@ eval_num_arg(void *data, int size, struct event_format *event, struct print_arg 
 			goto out_warning_op;
 		}
 		break;
+	case PRINT_DYNAMIC_ARRAY_LEN:
+		offset = pevent_read_number(pevent,
+					    data + arg->dynarray.field->offset,
+					    arg->dynarray.field->size);
+		/*
+		 * The total allocated length of the dynamic array is
+		 * stored in the top half of the field, and the offset
+		 * is in the bottom half of the 32 bit field.
+		 */
+		val = (unsigned long long)(offset >> 16);
+		break;
 	case PRINT_DYNAMIC_ARRAY:
 		/* Without [], we pass the address to the dynamic data */
 		offset = pevent_read_number(pevent,
 					    data + arg->dynarray.field->offset,
 					    arg->dynarray.field->size);
 		/*
-		 * The actual length of the dynamic array is stored
-		 * in the top half of the field, and the offset
+		 * The total allocated length of the dynamic array is
+		 * stored in the top half of the field, and the offset
 		 * is in the bottom half of the 32 bit field.
 		 */
 		offset &= 0xffff;

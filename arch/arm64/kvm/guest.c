@@ -293,7 +293,8 @@ int __attribute_const__ kvm_target_cpu(void)
 		break;
 	};
 
-	return -EINVAL;
+	/* Return a default generic target */
+	return KVM_ARM_TARGET_GENERIC_V8;
 }
 
 int kvm_vcpu_preferred_target(struct kvm_vcpu_init *init)
@@ -330,4 +331,55 @@ int kvm_arch_vcpu_ioctl_translate(struct kvm_vcpu *vcpu,
 				  struct kvm_translation *tr)
 {
 	return -EINVAL;
+}
+
+int kvm_arm_vcpu_arch_set_attr(struct kvm_vcpu *vcpu,
+			       struct kvm_device_attr *attr)
+{
+	int ret;
+
+	switch (attr->group) {
+	case KVM_ARM_VCPU_PMU_V3_CTRL:
+		ret = kvm_arm_pmu_v3_set_attr(vcpu, attr);
+		break;
+	default:
+		ret = -ENXIO;
+		break;
+	}
+
+	return ret;
+}
+
+int kvm_arm_vcpu_arch_get_attr(struct kvm_vcpu *vcpu,
+			       struct kvm_device_attr *attr)
+{
+	int ret;
+
+	switch (attr->group) {
+	case KVM_ARM_VCPU_PMU_V3_CTRL:
+		ret = kvm_arm_pmu_v3_get_attr(vcpu, attr);
+		break;
+	default:
+		ret = -ENXIO;
+		break;
+	}
+
+	return ret;
+}
+
+int kvm_arm_vcpu_arch_has_attr(struct kvm_vcpu *vcpu,
+			       struct kvm_device_attr *attr)
+{
+	int ret;
+
+	switch (attr->group) {
+	case KVM_ARM_VCPU_PMU_V3_CTRL:
+		ret = kvm_arm_pmu_v3_has_attr(vcpu, attr);
+		break;
+	default:
+		ret = -ENXIO;
+		break;
+	}
+
+	return ret;
 }

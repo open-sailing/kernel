@@ -4,6 +4,7 @@
 #include <linux/preempt_mask.h>
 #include <linux/lockdep.h>
 #include <linux/ftrace_irq.h>
+#include <linux/kprobes_irq.h>
 #include <linux/vtime.h>
 #include <asm/hardirq.h>
 
@@ -63,6 +64,7 @@ extern void irq_exit(void);
 	do {							\
 		lockdep_off();					\
 		ftrace_nmi_enter();				\
+		kprobes_nmi_enter();				\
 		BUG_ON(in_nmi());				\
 		preempt_count_add(NMI_OFFSET + HARDIRQ_OFFSET);	\
 		rcu_nmi_enter();				\
@@ -75,6 +77,7 @@ extern void irq_exit(void);
 		rcu_nmi_exit();					\
 		BUG_ON(!in_nmi());				\
 		preempt_count_sub(NMI_OFFSET + HARDIRQ_OFFSET);	\
+		kprobes_nmi_exit();				\
 		ftrace_nmi_exit();				\
 		lockdep_on();					\
 	} while (0)

@@ -1,0 +1,39 @@
+/**
+ * dts file for Hisilicon PhosphorHi1382 EVB
+ *
+ * Copyright (C) 2015,2016 Hisilicon Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * publishhed by the Free Software Foundation.
+ *
+ */
+
+/dts-v1/;
+
+/include/ "hi1382.dtsi"
+
+/ {
+	model = "Hisilicon PhosphorHi1382 EVB";
+	compatible = "hisilicon,hi1382-evb", "hisilicon,hi1382";
+
+	memory@a00000 {
+		device_type = "memory";
+		reg = <0x0 0x00a00000 0x0 0xdf600000>;
+	};
+
+	soc {
+		gmac0: gmac@fb800000 {
+			phy-handle = <&phy24>;
+			port-id = <4>;
+			phy-id = <0x600d8590>;
+			reg = <0xfb000000 0x10000>,
+			      <0xfb400000 0x30000>,
+			      <0xfb804000 0x1000>;
+		};
+	};
+
+	chosen {
+		bootargs = "root=/dev/ram0 console=ttyS0 earlycon=uart8250,mmio32,0xf1300000 initrd=0x3800040,128M";
+	};
+};

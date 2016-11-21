@@ -37,6 +37,7 @@
 #include <asm/irq_regs.h>
 #include <asm/pmu.h>
 #include <asm/stacktrace.h>
+#include <asm/perf_event.h>
 
 /*
  * ARMv8 supports a maximum of 32 events.
@@ -488,7 +489,7 @@ armpmu_reserve_hardware(struct arm_pmu *armpmu)
 			}
 
 			err = request_irq(irq, armpmu->handle_irq,
-					IRQF_NOBALANCING,
+					IRQF_NOBALANCING | IRQF_NO_THREAD,
 					"arm-pmu", armpmu);
 			if (err) {
 				pr_err("unable to request IRQ%d for ARM PMU counters\n",
@@ -824,9 +825,6 @@ static const unsigned armv8_pmuv3_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
 #define	ARMV8_IDX_COUNTER0	1
 #define	ARMV8_IDX_COUNTER_LAST	(ARMV8_IDX_CYCLE_COUNTER + cpu_pmu->num_events - 1)
 
-#define	ARMV8_MAX_COUNTERS	32
-#define	ARMV8_COUNTER_MASK	(ARMV8_MAX_COUNTERS - 1)
-
 /*
  * ARMv8 low level PMU access
  */
@@ -835,39 +833,7 @@ static const unsigned armv8_pmuv3_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
  * Perf Event to low level counters mapping
  */
 #define	ARMV8_IDX_TO_COUNTER(x)	\
-	(((x) - ARMV8_IDX_COUNTER0) & ARMV8_COUNTER_MASK)
-
-/*
- * Per-CPU PMCR: config reg
- */
-#define ARMV8_PMCR_E		(1 << 0) /* Enable all counters */
-#define ARMV8_PMCR_P		(1 << 1) /* Reset all counters */
-#define ARMV8_PMCR_C		(1 << 2) /* Cycle counter reset */
-#define ARMV8_PMCR_D		(1 << 3) /* CCNT counts every 64th cpu cycle */
-#define ARMV8_PMCR_X		(1 << 4) /* Export to ETM */
-#define ARMV8_PMCR_DP		(1 << 5) /* Disable CCNT if non-invasive debug*/
-#define	ARMV8_PMCR_N_SHIFT	11	 /* Number of counters supported */
-#define	ARMV8_PMCR_N_MASK	0x1f
-#define	ARMV8_PMCR_MASK		0x3f	 /* Mask for writable bits */
-
-/*
- * PMOVSR: counters overflow flag status reg
- */
-#define	ARMV8_OVSR_MASK		0xffffffff	/* Mask for writable bits */
-#define	ARMV8_OVERFLOWED_MASK	ARMV8_OVSR_MASK
-
-/*
- * PMXEVTYPER: Event selection reg
- */
-#define	ARMV8_EVTYPE_MASK	0xc80003ff	/* Mask for writable bits */
-#define	ARMV8_EVTYPE_EVENT	0x3ff		/* Mask for EVENT bits */
-
-/*
- * Event filters for PMUv3
- */
-#define	ARMV8_EXCLUDE_EL1	(1 << 31)
-#define	ARMV8_EXCLUDE_EL0	(1 << 30)
-#define	ARMV8_INCLUDE_EL2	(1 << 27)
+	(((x) - ARMV8_IDX_COUNTER0) & ARMV8_PMU_COUNTER_MASK)
 
 static inline u32 armv8pmu_pmcr_read(void)
 {
@@ -878,14 +844,14 @@ static inline u32 armv8pmu_pmcr_read(void)
 
 static inline void armv8pmu_pmcr_write(u32 val)
 {
-	val &= ARMV8_PMCR_MASK;
+	val &= ARMV8_PMU_PMCR_MASK;
 	isb();
 	asm volatile("msr pmcr_el0, %0" :: "r" (val));
 }
 
 static inline int armv8pmu_has_overflowed(u32 pmovsr)
 {
-	return pmovsr & ARMV8_OVERFLOWED_MASK;
+	return pmovsr & ARMV8_PMU_OVERFLOWED_MASK;
 }
 
 static inline int armv8pmu_counter_valid(int idx)
@@ -955,7 +921,7 @@ static inline void armv8pmu_write_counter(int idx, u32 value)
 static inline void armv8pmu_write_evtype(int idx, u32 val)
 {
 	if (armv8pmu_select_counter(idx) == idx) {
-		val &= ARMV8_EVTYPE_MASK;
+		val &= ARMV8_PMU_EVTYPE_MASK;
 		asm volatile("msr pmxevtyper_el0, %0" :: "r" (val));
 	}
 }
@@ -1032,7 +998,7 @@ static inline u32 armv8pmu_getreset_flags(void)
 	asm volatile("mrs %0, pmovsclr_el0" : "=r" (value));
 
 	/* Write to clear flags */
-	value &= ARMV8_OVSR_MASK;
+	value &= ARMV8_PMU_OVSR_MASK;
 	asm volatile("msr pmovsclr_el0, %0" :: "r" (value));
 
 	return value;
@@ -1164,7 +1130,7 @@ static void armv8pmu_start(void)
 
 	raw_spin_lock_irqsave(&events->pmu_lock, flags);
 	/* Enable all counters */
-	armv8pmu_pmcr_write(armv8pmu_pmcr_read() | ARMV8_PMCR_E);
+	armv8pmu_pmcr_write(armv8pmu_pmcr_read() | ARMV8_PMU_PMCR_E);
 	raw_spin_unlock_irqrestore(&events->pmu_lock, flags);
 }
 
@@ -1175,7 +1141,7 @@ static void armv8pmu_stop(void)
 
 	raw_spin_lock_irqsave(&events->pmu_lock, flags);
 	/* Disable all counters */
-	armv8pmu_pmcr_write(armv8pmu_pmcr_read() & ~ARMV8_PMCR_E);
+	armv8pmu_pmcr_write(armv8pmu_pmcr_read() & ~ARMV8_PMU_PMCR_E);
 	raw_spin_unlock_irqrestore(&events->pmu_lock, flags);
 }
 
@@ -1183,7 +1149,7 @@ static int armv8pmu_get_event_idx(struct pmu_hw_events *cpuc,
 				  struct hw_perf_event *event)
 {
 	int idx;
-	unsigned long evtype = event->config_base & ARMV8_EVTYPE_EVENT;
+	unsigned long evtype = event->config_base & ARMV8_PMU_EVTYPE_EVENT;
 
 	/* Always place a cycle counter into the cycle counter. */
 	if (evtype == ARMV8_PMUV3_PERFCTR_CLOCK_CYCLES) {
@@ -1217,11 +1183,11 @@ static int armv8pmu_set_event_filter(struct hw_perf_event *event,
 	if (attr->exclude_idle)
 		return -EPERM;
 	if (attr->exclude_user)
-		config_base |= ARMV8_EXCLUDE_EL0;
+		config_base |= ARMV8_PMU_EXCLUDE_EL0;
 	if (attr->exclude_kernel)
-		config_base |= ARMV8_EXCLUDE_EL1;
+		config_base |= ARMV8_PMU_EXCLUDE_EL1;
 	if (!attr->exclude_hv)
-		config_base |= ARMV8_INCLUDE_EL2;
+		config_base |= ARMV8_PMU_INCLUDE_EL2;
 
 	/*
 	 * Install the filter into config_base as this is used to
@@ -1241,14 +1207,14 @@ static void armv8pmu_reset(void *info)
 		armv8pmu_disable_event(NULL, idx);
 
 	/* Initialize & Reset PMNC: C and P bits. */
-	armv8pmu_pmcr_write(ARMV8_PMCR_P | ARMV8_PMCR_C);
+	armv8pmu_pmcr_write(ARMV8_PMU_PMCR_P | ARMV8_PMU_PMCR_C);
 }
 
 static int armv8_pmuv3_map_event(struct perf_event *event)
 {
 	return map_cpu_event(event, &armv8_pmuv3_perf_map,
 				&armv8_pmuv3_perf_cache_map,
-				ARMV8_EVTYPE_EVENT);
+				ARMV8_PMU_EVTYPE_EVENT);
 }
 
 static struct arm_pmu armv8pmu = {
@@ -1269,7 +1235,7 @@ static u32 __init armv8pmu_read_num_pmnc_events(void)
 	u32 nb_cnt;
 
 	/* Read the nb of CNTx counters supported from PMNC */
-	nb_cnt = (armv8pmu_pmcr_read() >> ARMV8_PMCR_N_SHIFT) & ARMV8_PMCR_N_MASK;
+	nb_cnt = (armv8pmu_pmcr_read() >> ARMV8_PMU_PMCR_N_SHIFT) & ARMV8_PMU_PMCR_N_MASK;
 
 	/* Add the CPU cycles counter and return */
 	return nb_cnt + 1;

@@ -1634,11 +1634,12 @@ F:	drivers/i2c/busses/i2c-cadence.c
 F:	drivers/mmc/host/sdhci-of-arasan.c
 F:	drivers/edac/synopsys_edac.c
 
-ARM SMMU DRIVER
+ARM SMMU DRIVERS
 M:	Will Deacon <will.deacon@arm.com>
 L:	linux-arm-kernel@lists.infradead.org (moderated for non-subscribers)
 S:	Maintained
 F:	drivers/iommu/arm-smmu.c
+F:	drivers/iommu/arm-smmu-v3.c
 F:	drivers/iommu/io-pgtable-arm.c
 
 ARM64 PORT (AARCH64 ARCHITECTURE)
@@ -4687,6 +4688,13 @@ F:	include/linux/hippidevice.h
 F:	include/uapi/linux/if_hippi.h
 F:	net/802/hippi.c
 F:	drivers/net/hippi/
+
+HISILICON FRAMEBUFFER DRIVER
+M:	Rongrong Zou <zourongrong@huawei.com>
+L:	linux-fbdev@vger.kernel.org
+S:	Maintained
+F:	Documentation/fb/intelfb.txt
+F:	drivers/video/fbdev/hisilicon/
 
 HOST AP DRIVER
 M:	Jouni Malinen <j@w1.fi>
@@ -8869,6 +8877,15 @@ L:	linux-rdma@vger.kernel.org
 W:	http://www.emulex.com
 S:	Supported
 F:	drivers/infiniband/hw/ocrdma/
+
+HISILICON ROCE DRIVER
+M:	Wei Hu(Xavier) <xavier.huwei@huawei.com>
+M:	Lijun Ou <oulijun@huawei.com>
+M:	Dongdong Huang(Donald) <hdd.huang@huawei.com>
+L:	linux-rdma@vger.kernel.org
+S:	Maintained
+F:	drivers/infiniband/hw/hisilicon/
+F:	Documentation/devicetree/bindings/infiniband/hisilicon-hns-roce.txt
 
 SFC NETWORK DRIVER
 M:	Solarflare linux maintainers <linux-net-drivers@solarflare.com>

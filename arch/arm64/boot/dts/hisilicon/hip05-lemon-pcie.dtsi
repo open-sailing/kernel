@@ -1,0 +1,134 @@
+/**
+ * Huawei Ltd.
+ * PhosphorV660
+ */
+
+/ {
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	/* The serdes nodes will never be used in hulk-4.1, they are
+	 * only used in hulk-3.19, because in hulk-4.1, we don't have
+	 * resetting serdes operation, but in hulk-3.19 we have. the
+	 * serdes nodes are defined for the resetting operation.
+	 *
+	 * In order to unify hulk-3.19 and hulk-4.1 ,we still keep
+	 * these nodes here.
+	 */
+	serdes@B2000000{
+		compatible = "hisilicon,hilink15bp";
+		reg = <0x0 0xB2000000 0 0x40000>,<0x0 0xB0002300 0x0 0x4>;
+		reg-names = "serdes_base","muxctrl_base";
+		id = <0>;
+	};
+	serdes@B2080000{
+		compatible = "hisilicon,hilink15bp";
+		reg = <0x0 0xB2080000 0 0x40000>,<0x0 0xB0002304 0x0 0x4>;
+		reg-names = "serdes_base","muxctrl_base";
+		id = <1>;
+	};
+	serdes@B2100000{
+		compatible = "hisilicon,hilink15bp";
+		reg = <0x0 0xB2100000 0 0x40000>,<0x0 0xB0002308 0x0 0x4>;
+		reg-names = "serdes_base","muxctrl_base";
+		id = <2>;
+	};
+	serdes@C2200000{
+		compatible = "hisilicon,hilink15bp";
+		reg = <0x0 0xC2200000 0 0x40000>,<0x0 0xC0000180 0x0 0x4>;
+		reg-names = "serdes_base","muxctrl_base";
+		id = <3>;
+	};
+	serdes@C2280000{
+		compatible = "hisilicon,hilink15bp";
+		reg = <0x0 0xC2280000 0 0x40000>,<0x0 0xC0000190 0x0 0x4>;
+		reg-names = "serdes_base","muxctrl_base";
+		id = <4>;
+	};
+	serdes@B2180000{
+		compatible = "hisilicon,hilink15bp";
+		reg = <0x0 0xB2180000 0 0x40000>,<0x0 0xB0002314 0x0 0x4>;
+		reg-names  = "serdes_base","muxctrl_base";
+		id = <5>;
+	};
+	serdes@B2200000{
+		compatible = "hisilicon,hilink15bp";
+		reg = <0x0 0xB2200000 0 0x40000>;
+		reg-names  = "serdes_base";
+		id = <6>;
+	};
+	pcie0: pcie@0xb0070000 {
+		compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+		reg =  <0 0xb0070000 0 0x10000>,<0 0xb0000000 0 0x10000>,
+			<0 0xb00c0000 0 0x10000>,<0 0xb4000000 0 0x2000>,
+			<0 0xb2080000 0 0x40000>;
+		reg-names = "rc_dbi", "subctrl", "pcs", "config", "serdes";
+		bus-range = <0 63>;
+		msi-parent = <&its_pcie>;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		device_type = "pci";
+		dma-coherent;
+		ranges = <0x82000000 0x0 0xb4020000 0x0 0xb4020000 0x0 0x1fe0000>,
+			<0x01000000 0x0 0x0 0x0 0xb4010000 0x0 0x10000>;
+		num-lanes = <8>;
+		port-id = <0>;
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0xf800 0 0 7>;
+		interrupt-map = <0x0 0 0 1 &mbigen_pcie 1 4
+					 0x0 0 0 2 &mbigen_pcie 2 4
+					 0x0 0 0 3 &mbigen_pcie 3 4
+					 0x0 0 0 4 &mbigen_pcie 4 4>;
+		status = "ok";
+	};
+
+	pcie1: pcie@0xb0080000 {
+		compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+		reg =  <0 0xb0080000 0 0x10000>,<0 0xb0000000 0 0x10000>,
+			<0 0xb00d0000 0 0x10000>,<0 0xb3000000 0 0x2000>,
+			<0 0xb2000000 0 0x40000>;
+		reg-names = "rc_dbi", "subctrl", "pcs", "config", "serdes";
+		bus-range = <64 127>;
+		msi-parent = <&its_pcie>;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		device_type = "pci";
+		dma-coherent;
+			ranges = <0x82000000 0x0 0xb3020000 0x0 0xb3020000 0x0 0xfe0000>,
+				<0x01000000 0x0 0x0 0x0 0xb3010000 0x0 0x10000>;
+		num-lanes = <8>;
+		port-id = <1>;
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0xf800 0 0 7>;
+		interrupt-map = <0x0 0 0 1 &mbigen_pcie 1 4
+					 0x0 0 0 2 &mbigen_pcie 2 4
+					 0x0 0 0 3 &mbigen_pcie 3 4
+					 0x0 0 0 4 &mbigen_pcie 4 4>;
+		status = "ok";
+	};
+
+	pcie2: pcie@0xb0090000 {
+		compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+		reg = <0 0xb0090000 0 0x10000>,<0 0xb0000000 0 0x10000>,
+			<0 0xb00e0000 0 0x10000>,<0 0xb8000000 0 0x2000>,
+			<0 0xb2100000 0 0x40000>;
+		reg-names = "rc_dbi", "subctrl", "pcs", "config", "serdes";
+		bus-range = <128 191>;
+		msi-parent = <&its_pcie>;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		device_type = "pci";
+		dma-coherent;
+		ranges = <0x82000000 0x0 0xb8020000 0x0 0xb8020000 0x0 0x7fe0000>,
+			<0x01000000 0x0 0x0 0x0 0xb8010000 0x0 0x10000>;
+		num-lanes = <8>;
+		port-id = <2>;
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0xf800 0 0 7>;
+		interrupt-map = <0x0 0 0 1 &mbigen_pcie 1 4
+					 0x0 0 0 2 &mbigen_pcie 2 4
+					 0x0 0 0 3 &mbigen_pcie 3 4
+					 0x0 0 0 4 &mbigen_pcie 4 4>;
+		status = "ok";
+	};
+};

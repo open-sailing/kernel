@@ -28,8 +28,9 @@
 #include <asm/cputype.h>
 #include <asm/ptrace.h>
 #include <asm/kvm_arm.h>
+#include <asm/kvm_asm.h>
 #include <asm/kvm_coproc.h>
-
+#include <asm/kvm_mmu.h>
 /*
  * ARMv8 Reset Values
  */
@@ -63,6 +64,12 @@ int kvm_arch_dev_ioctl_check_extension(long ext)
 	switch (ext) {
 	case KVM_CAP_ARM_EL1_32BIT:
 		r = cpu_has_32bit_el1();
+		break;
+	case KVM_CAP_ARM_PMU_V3:
+		r = kvm_arm_support_pmu_v3();
+		break;
+	case KVM_CAP_VCPU_ATTRIBUTES:
+		r = 1;
 		break;
 	default:
 		r = 0;
@@ -104,8 +111,23 @@ int kvm_reset_vcpu(struct kvm_vcpu *vcpu)
 	/* Reset system registers */
 	kvm_reset_sys_regs(vcpu);
 
+	/* Reset PMU */
+	kvm_pmu_vcpu_reset(vcpu);
+
 	/* Reset timer */
 	kvm_timer_vcpu_reset(vcpu, cpu_vtimer_irq);
 
 	return 0;
+}
+
+extern char __hyp_idmap_text_start[];
+
+phys_addr_t kvm_hyp_reset_entry(void)
+{
+	unsigned long offset;
+
+	offset = (unsigned long)__kvm_hyp_reset
+		 - ((unsigned long)__hyp_idmap_text_start & PAGE_MASK);
+
+	return TRAMPOLINE_VA + offset;
 }

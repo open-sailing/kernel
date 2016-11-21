@@ -29,8 +29,11 @@
 
 #include <linux/string.h>
 
+#include <asm/alternative.h>
+#include <asm/is_compat.h>
 #include <asm/fpsimd.h>
 #include <asm/hw_breakpoint.h>
+#include <asm/lse.h>
 #include <asm/pgtable-hwdef.h>
 #include <asm/ptrace.h>
 #include <asm/types.h>
@@ -39,7 +42,7 @@
 #define STACK_TOP_MAX		TASK_SIZE_64
 #ifdef CONFIG_COMPAT
 #define AARCH32_VECTORS_BASE	0xffff0000
-#define STACK_TOP		(test_thread_flag(TIF_32BIT) ? \
+#define STACK_TOP		(is_compat_task() ? \
 				AARCH32_VECTORS_BASE : STACK_TOP_MAX)
 #else
 #define STACK_TOP		STACK_TOP_MAX
@@ -102,7 +105,7 @@ static inline void start_thread(struct pt_regs *regs, unsigned long pc,
 	regs->sp = sp;
 }
 
-#ifdef CONFIG_COMPAT
+#ifdef CONFIG_AARCH32_EL0
 static inline void compat_start_thread(struct pt_regs *regs, unsigned long pc,
 				       unsigned long sp)
 {
@@ -160,13 +163,18 @@ static inline void prefetchw(const void *ptr)
 }
 
 #define ARCH_HAS_SPINLOCK_PREFETCH
-static inline void spin_lock_prefetch(const void *x)
+static inline void spin_lock_prefetch(const void *ptr)
 {
-	prefetchw(x);
+	asm volatile(ARM64_LSE_ATOMIC_INSN(
+		     "prfm pstl1strm, %a0",
+		     "nop") : : "p" (ptr));
 }
 
 #define HAVE_ARCH_PICK_MMAP_LAYOUT
 
 #endif
+
+void cpu_enable_pan(void);
+void cpu_enable_uao(void);
 
 #endif /* __ASM_PROCESSOR_H */
