@@ -100,6 +100,10 @@ enum hnae_led_state {
 	HNAE_LED_OFF
 };
 
+enum hnae_coal_adapt_state {
+	HNAE_COAL_ADAPT_ENABLE = 0,
+};
+
 #define HNS_RX_FLAG_VLAN_PRESENT 0x1
 #define HNS_RX_FLAG_L3ID_IPV4 0x0
 #define HNS_RX_FLAG_L3ID_IPV6 0x1
@@ -237,6 +241,8 @@ struct hnae_desc_cb {
 #define is_rx_ring(ring) (!is_tx_ring(ring))
 #define ring_to_dma_dir(ring) (is_tx_ring(ring) ? \
 	DMA_TO_DEVICE : DMA_FROM_DEVICE)
+#define is_coal_adapt(ring) (test_bit(HNAE_COAL_ADAPT_ENABLE,\
+				     &(ring)->q->handle->coal_set_adapt_flag))
 
 struct ring_stats {
 	u64 io_err_cnt;
@@ -555,6 +561,8 @@ struct hnae_handle {
 	u32 if_support;
 	int q_num;
 	int vf_id;
+	spinlock_t coal_set_lock;	/* hnae lock for coalesce param adapt*/
+	unsigned long coal_set_adapt_flag;	/* self adapt coalesce flag */
 	u32 coal_param;		/* self adapt coalesce param */
 	u32 adapt_ring_idx;	/* the ring index of config high coalesce */
 	u32 update_time;	/* update the coalesce param time */
