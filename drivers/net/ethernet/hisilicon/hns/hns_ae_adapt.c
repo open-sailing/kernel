@@ -18,7 +18,6 @@
 #include "hns_dsaf_rcb.h"
 
 #define AE_NAME_PORT_ID_IDX 6
-#define BD_SIZE_2048_MAX_MTU   6000
 
 static struct hns_mac_cb *hns_get_mac_cb(struct hnae_handle *handle)
 {
