@@ -301,7 +301,7 @@ static void __init reset_cpu_topology(void)
 static void hack_cpu_topology(void)
 {
 	int i;
-	static int fixed_cpu_topo[CPU_CLUSTERS] __initdata = { 256, 768, 1280, 1792 };
+	static int fixed_cpu_topo[CPU_CLUSTERS] __initdata = { 0, 1, 2, 3 };
 
 	printk("CPU topology: Hacking with fixed value\n");
 
