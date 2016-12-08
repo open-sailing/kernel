@@ -2685,6 +2685,11 @@ int dev_ethtool(struct net *net, struct ifreq *ifr)
 	case ETHTOOL_SLINKSETTINGS:
 		rc = ethtool_set_link_ksettings(dev, useraddr);
 		break;
+	case ETHTOOL_SRELAXORDER:
+		rc = ethtool_set_value_void(dev, useraddr,
+					dev->ethtool_ops->set_relaxorder);
+		 break;
+
 	default:
 		rc = -EOPNOTSUPP;
 	}

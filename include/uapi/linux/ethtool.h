@@ -1314,6 +1314,8 @@ struct ethtool_per_queue_op {
 #define ETHTOOL_GLINKSETTINGS	0x0000004c /* Get ethtool_link_settings */
 #define ETHTOOL_SLINKSETTINGS	0x0000004d /* Set ethtool_link_settings */
 
+#define ETHTOOL_SRELAXORDER	0x00000050 /* Set relax ordering mode, on or off*/
+
 
 /* compatibility with older code */
 #define SPARC_ETH_GSET		ETHTOOL_GSET
@@ -1493,6 +1495,10 @@ static inline int ethtool_validate_speed(__u32 speed)
 #define DUPLEX_HALF		0x00
 #define DUPLEX_FULL		0x01
 #define DUPLEX_UNKNOWN		0xff
+
+/* Relax Ordering mode, on or off. */
+#define RELAXORDER_OFF          0x00
+#define RELAXORDER_ON           0x01
 
 static inline int ethtool_validate_duplex(__u8 duplex)
 {

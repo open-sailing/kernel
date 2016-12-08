@@ -286,6 +286,7 @@ bool ethtool_convert_link_mode_to_legacy_u32(u32 *legacy_u32,
  *	fields should be ignored (use %__ETHTOOL_LINK_MODE_MASK_NBITS
  *	instead of the latter), any change to them will be overwritten
  *	by kernel. Returns a negative error code or zero.
+ * @set_relaxorder: set relax ordering mode, on|off.
  *
  * All operations are optional (i.e. the function pointer may be set
  * to %NULL) and callers must take this into account.  Callers must
@@ -372,5 +373,6 @@ struct ethtool_ops {
 				      struct ethtool_link_ksettings *);
 	int	(*set_link_ksettings)(struct net_device *,
 				      const struct ethtool_link_ksettings *);
+	void    (*set_relaxorder)(struct net_device *, u32);
 };
 #endif /* _LINUX_ETHTOOL_H */
