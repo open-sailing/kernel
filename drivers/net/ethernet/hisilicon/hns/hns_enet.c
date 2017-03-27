@@ -859,7 +859,7 @@ static void hns_nic_adpt_coalesce(struct hns_nic_ring_data *ring_data)
 			handle->dev->ops->set_coalesce_usecs(handle,
 						new_coal_param);
 			handle->dev->ops->set_coalesce_frames(handle,
-						new_coal_param);
+						1, new_coal_param);
 			handle->coal_param = new_coal_param;
 			handle->adapt_ring_idx = ring_data->queue_index;
 		}
