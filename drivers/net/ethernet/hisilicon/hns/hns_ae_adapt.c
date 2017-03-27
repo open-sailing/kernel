@@ -86,7 +86,11 @@ struct hnae_handle *hns_ae_get_handle(struct hnae_ae_dev *dev,
 
 	ring_pair_cb = hns_ae_get_base_ring_pair(dsaf_dev, port_id);
 	vfnum_per_port = hns_ae_get_vf_num_per_port(dsaf_dev, port_id);
-	qnum_per_vf = hns_ae_get_q_num_per_vf(dsaf_dev, port_id);
+
+	if (dsaf_dev->mac_cb[port_id]->speed != MAC_SPEED_10000)
+		qnum_per_vf = 1;
+	else
+		qnum_per_vf = hns_ae_get_q_num_per_vf(dsaf_dev, port_id);
 
 	vf_cb = kzalloc(sizeof(*vf_cb) +
 			qnum_per_vf * sizeof(struct hnae_queue *), GFP_KERNEL);

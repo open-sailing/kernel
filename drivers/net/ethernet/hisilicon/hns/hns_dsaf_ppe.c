@@ -315,8 +315,13 @@ static void hns_ppe_init_hw(struct hns_ppe_cb *ppe_cb)
 		hns_ppe_set_rss_key(ppe_cb, ppe_cb->rss_key);
 
 		/* Set default indrection table in h/w */
-		for (i = 0; i < HNS_PPEV2_RSS_IND_TBL_SIZE; i++)
-			ppe_cb->rss_indir_table[i] = i;
+		if (dsaf_dev->mac_cb[port]->speed != MAC_SPEED_10000)
+			for (i = 0; i < HNS_PPEV2_RSS_IND_TBL_SIZE; i++)
+				ppe_cb->rss_indir_table[i] = 0;
+		else
+			for (i = 0; i < HNS_PPEV2_RSS_IND_TBL_SIZE; i++)
+				ppe_cb->rss_indir_table[i] = i;
+
 		hns_ppe_set_indir_table(ppe_cb, ppe_cb->rss_indir_table);
 	}
 }
