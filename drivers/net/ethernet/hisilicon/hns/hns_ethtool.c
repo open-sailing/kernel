@@ -760,8 +760,8 @@ static int hns_get_coalesce(struct net_device *net_dev,
 
 	ops = priv->ae_handle->dev->ops;
 
-	ec->use_adaptive_rx_coalesce = 1;
-	ec->use_adaptive_tx_coalesce = 1;
+	ec->use_adaptive_rx_coalesce = priv->ae_handle->coal_adapt_en;
+	ec->use_adaptive_tx_coalesce = priv->ae_handle->coal_adapt_en;
 
 	if ((!ops->get_coalesce_usecs) ||
 	    (!ops->get_max_coalesced_frames))
@@ -804,6 +804,9 @@ static int hns_set_coalesce(struct net_device *net_dev,
 	int rc1, rc2;
 
 	ops = priv->ae_handle->dev->ops;
+
+	if (ec->use_adaptive_rx_coalesce != priv->ae_handle->coal_adapt_en)
+		priv->ae_handle->coal_adapt_en = ec->use_adaptive_rx_coalesce;
 
 	if (ec->tx_coalesce_usecs != ec->rx_coalesce_usecs)
 		return -EINVAL;
@@ -1242,7 +1245,6 @@ hns_set_rss(struct net_device *netdev, const u32 *indir, const u8 *key,
 {
 	struct hns_nic_priv *priv = netdev_priv(netdev);
 	struct hnae_ae_ops *ops;
-	int ret;
 
 	if (AE_IS_VER1(priv->enet_ver)) {
 		netdev_err(netdev,
