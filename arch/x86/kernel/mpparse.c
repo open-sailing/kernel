@@ -604,7 +604,7 @@ static int __init smp_scan_config(unsigned long base, unsigned long length)
 
 void __init default_find_smp_config(void)
 {
-	unsigned int address;
+	unsigned int address, cpu;
 
 	/*
 	 * FIXME: Linux assumes you have 640K of base ram..
@@ -636,8 +636,22 @@ void __init default_find_smp_config(void)
 	 */
 
 	address = get_bios_ebda();
-	if (address)
-		smp_scan_config(address, 0x400);
+	if (address && smp_scan_config(address, 0x400))
+		return;
+
+	/* If everything fails, we assume to be under QEMU with
+	 * no valid MP Table provided by BIOS. Set things up for
+	 * things to work in this case if possible_cpus has been
+	 * explicitly provided on the kernel command line. */
+	if (microvm) {
+		pr_err("default_find_smp_config: creating MicroVM smp config.\n");
+		for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
+			pr_err("default_find_smp_config: adding cpu %u.\n", cpu);
+			if (cpu == 0)
+				boot_cpu_physical_apicid = cpu;
+			generic_processor_info(cpu, 0x10);
+		}
+	}
 }
 
 #ifdef CONFIG_X86_IO_APIC

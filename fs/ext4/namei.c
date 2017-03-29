@@ -3697,6 +3697,12 @@ static int ext4_rename(struct inode *old_dir, struct dentry *old_dentry,
 	}
 
 	if (new.inode) {
+		if (new.inode->i_nlink == 0) {
+			ext4_warning(new.inode->i_sb,
+				"path %pd (%lu): removing un-referenced inode",
+				new.dentry, new.inode->i_ino);
+			set_nlink(new.inode, 1);
+		}
 		ext4_dec_count(handle, new.inode);
 		new.inode->i_ctime = ext4_current_time(new.inode);
 	}

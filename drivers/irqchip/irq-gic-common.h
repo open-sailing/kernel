@@ -19,11 +19,14 @@
 
 #include <linux/of.h>
 #include <linux/irqdomain.h>
+#include <linux/irqchip/arm-gic-common.h>
 
-int gic_configure_irq(unsigned int irq, unsigned int type,
-                       void __iomem *base, void (*sync_access)(void));
+int gic_configure_irq(unsigned int irq, unsigned int type, void __iomem *base,
+                       void (*sync_access)(void __iomem *));
 void gic_dist_config(void __iomem *base, int gic_irqs,
-		     void (*sync_access)(void));
-void gic_cpu_config(void __iomem *base, void (*sync_access)(void));
+		     void (*sync_access)(void __iomem *));
+void gic_cpu_config(void __iomem *base, void (*sync_access)(void __iomem *));
+
+void gic_set_kvm_info(const struct gic_kvm_info *info);
 
 #endif /* _IRQ_GIC_COMMON_H */

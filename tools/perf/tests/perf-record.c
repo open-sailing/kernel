@@ -240,7 +240,7 @@ int test__PERF_RECORD(void)
 					bname = strrchr(mmap_filename, '/');
 					if (bname != NULL) {
 						if (!found_cmd_mmap)
-							found_cmd_mmap = !strcmp(bname + 1, cmd);
+							found_cmd_mmap = !strncmp(bname + 1, cmd, 5);
 						if (!found_libc_mmap)
 							found_libc_mmap = !strncmp(bname + 1, "libc", 4);
 						if (!found_ld_mmap)

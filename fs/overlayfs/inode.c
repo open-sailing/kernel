@@ -12,8 +12,7 @@
 #include <linux/xattr.h>
 #include "overlayfs.h"
 
-static int ovl_copy_up_last(struct dentry *dentry, struct iattr *attr,
-			    bool no_data)
+static int ovl_copy_up_truncate(struct dentry *dentry)
 {
 	int err;
 	struct dentry *parent;
@@ -30,10 +29,8 @@ static int ovl_copy_up_last(struct dentry *dentry, struct iattr *attr,
 	if (err)
 		goto out_dput_parent;
 
-	if (no_data)
-		stat.size = 0;
-
-	err = ovl_copy_up_one(parent, dentry, &lowerpath, &stat, attr);
+	stat.size = 0;
+	err = ovl_copy_up_one(parent, dentry, &lowerpath, &stat);
 
 out_dput_parent:
 	dput(parent);
@@ -54,7 +51,7 @@ int ovl_setattr(struct dentry *dentry, struct iattr *attr)
 	 * inode_newsize_ok() will always check against MAX_LFS_FILESIZE and not
 	 * check for a swapfile (which this won't be anyway).
 	 */
-	err = inode_change_ok(dentry->d_inode, attr);
+	err = setattr_prepare(dentry, attr);
 	if (err)
 		return err;
 
@@ -117,6 +114,31 @@ int ovl_permission(struct inode *inode, int mask)
 
 	realdentry = ovl_entry_real(oe, &is_upper);
 
+	if (ovl_is_default_permissions(inode)) {
+		struct kstat stat;
+		struct path realpath = { .dentry = realdentry };
+
+		if (mask & MAY_NOT_BLOCK)
+			return -ECHILD;
+
+		realpath.mnt = ovl_entry_mnt_real(oe, inode, is_upper);
+
+		err = vfs_getattr(&realpath, &stat);
+		if (err)
+			goto out_dput;
+
+		err = -ESTALE;
+		if ((stat.mode ^ inode->i_mode) & S_IFMT)
+			goto out_dput;
+
+		inode->i_mode = stat.mode;
+		inode->i_uid = stat.uid;
+		inode->i_gid = stat.gid;
+
+		err = generic_permission(inode, mask);
+		goto out_dput;
+	}
+
 	/* Careful in RCU walk mode */
 	realinode = ACCESS_ONCE(realdentry->d_inode);
 	if (!realinode) {
@@ -146,6 +168,9 @@ int ovl_permission(struct inode *inode, int mask)
 		    (S_ISREG(mode) || S_ISDIR(mode) || S_ISLNK(mode)))
 			goto out_dput;
 	}
+
+	if (!is_upper)
+		mask |= MAY_OPEN_LOWER;
 
 	err = __inode_permission(realinode, mask);
 out_dput:
@@ -342,6 +367,22 @@ out:
 	return err;
 }
 
+struct posix_acl *ovl_get_acl(struct inode *inode, int type)
+{
+	struct inode *realinode = ovl_inode_real(inode);
+
+	if (!realinode)
+		return ERR_PTR(-ENOENT);
+
+	if (!IS_POSIXACL(realinode))
+		return NULL;
+
+	if (!realinode->i_op->get_acl)
+		return NULL;
+
+	return realinode->i_op->get_acl(realinode, type);
+}
+
 static bool ovl_open_need_copy_up(int flags, enum ovl_path_type type,
 				  struct dentry *realdentry)
 {
@@ -373,7 +414,7 @@ struct inode *ovl_d_select_inode(struct dentry *dentry, unsigned file_flags)
 			return ERR_PTR(err);
 
 		if (file_flags & O_TRUNC)
-			err = ovl_copy_up_last(dentry, NULL, true);
+			err = ovl_copy_up_truncate(dentry);
 		else
 			err = ovl_copy_up(dentry);
 		ovl_drop_write(dentry);
@@ -394,6 +435,7 @@ static const struct inode_operations ovl_file_inode_operations = {
 	.getxattr	= ovl_getxattr,
 	.listxattr	= ovl_listxattr,
 	.removexattr	= ovl_removexattr,
+	.get_acl	= ovl_get_acl,
 };
 
 static const struct inode_operations ovl_symlink_inode_operations = {

@@ -608,6 +608,12 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 		return -EIO;
 	}
 
+	/* Increment the phy device driver module reference count */
+	if (!try_module_get(d->driver->owner)) {
+		dev_err(&dev->dev, "failed to get the device driver module\n");
+		return -EIO;
+	}
+
 	phydev->attached_dev = dev;
 	dev->phydev = phydev;
 
@@ -676,6 +682,9 @@ void phy_detach(struct phy_device *phydev)
 
 	if (phydev->bus->dev.driver)
 		module_put(phydev->bus->dev.driver->owner);
+
+	if (phydev->dev.driver)
+		module_put(phydev->dev.driver->owner);
 
 	phydev->attached_dev->phydev = NULL;
 	phydev->attached_dev = NULL;
@@ -818,8 +827,9 @@ static int genphy_config_advert(struct phy_device *phydev)
  */
 int genphy_setup_forced(struct phy_device *phydev)
 {
-	int ctl = 0;
+	int ctl = phy_read(phydev, MII_BMCR);
 
+	ctl &= BMCR_LOOPBACK | BMCR_ISOLATE | BMCR_PDOWN;
 	phydev->pause = 0;
 	phydev->asym_pause = 0;
 

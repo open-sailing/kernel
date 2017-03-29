@@ -306,8 +306,11 @@ static int skcipher_sendmsg(struct socket *sock, struct msghdr *msg,
 {
 	struct sock *sk = sock->sk;
 	struct alg_sock *ask = alg_sk(sk);
+	struct sock *psk = ask->parent;
+	struct alg_sock *pask = alg_sk(psk);
 	struct skcipher_ctx *ctx = ask->private;
-	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(&ctx->req);
+	struct skcipher_tfm *skc = pask->private;
+	struct crypto_ablkcipher *tfm = skc->skcipher;
 	unsigned ivsize = crypto_ablkcipher_ivsize(tfm);
 	struct skcipher_sg_list *sgl;
 	struct af_alg_control con = {};
@@ -515,13 +518,14 @@ static int skcipher_recvmsg_async(struct socket *sock, struct msghdr *msg,
 	struct skcipher_async_req *sreq;
 	struct ablkcipher_request *req;
 	struct skcipher_async_rsgl *last_rsgl = NULL;
-	unsigned int txbufs = 0, len = 0, tx_nents = skcipher_all_sg_nents(ctx);
+	unsigned int txbufs = 0, len = 0, tx_nents;
 	unsigned int reqlen = sizeof(struct skcipher_async_req) +
 				GET_REQ_SIZE(ctx) + GET_IV_SIZE(ctx);
 	int err = -ENOMEM;
 	bool mark = false;
 
 	lock_sock(sk);
+	tx_nents = skcipher_all_sg_nents(ctx);
 	req = kmalloc(reqlen, GFP_KERNEL);
 	if (unlikely(!req))
 		goto unlock;
@@ -538,7 +542,7 @@ static int skcipher_recvmsg_async(struct socket *sock, struct msghdr *msg,
 	sg_init_table(sreq->tsg, tx_nents);
 	memcpy(sreq->iv, ctx->iv, GET_IV_SIZE(ctx));
 	ablkcipher_request_set_tfm(req, crypto_ablkcipher_reqtfm(&ctx->req));
-	ablkcipher_request_set_callback(req, CRYPTO_TFM_REQ_MAY_BACKLOG,
+	ablkcipher_request_set_callback(req, CRYPTO_TFM_REQ_MAY_SLEEP,
 					skcipher_async_cb, sk);
 
 	while (iov_iter_count(&msg->msg_iter)) {
@@ -637,9 +641,12 @@ static int skcipher_recvmsg_sync(struct socket *sock, struct msghdr *msg,
 {
 	struct sock *sk = sock->sk;
 	struct alg_sock *ask = alg_sk(sk);
+	struct sock *psk = ask->parent;
+	struct alg_sock *pask = alg_sk(psk);
 	struct skcipher_ctx *ctx = ask->private;
-	unsigned bs = crypto_ablkcipher_blocksize(crypto_ablkcipher_reqtfm(
-		&ctx->req));
+	struct skcipher_tfm *skc = pask->private;
+	struct crypto_ablkcipher *tfm = skc->skcipher;
+	unsigned bs = crypto_ablkcipher_blocksize(tfm);
 	struct skcipher_sg_list *sgl;
 	struct scatterlist *sg;
 	int err = -EAGAIN;
@@ -648,13 +655,6 @@ static int skcipher_recvmsg_sync(struct socket *sock, struct msghdr *msg,
 
 	lock_sock(sk);
 	while (msg_data_left(msg)) {
-		sgl = list_first_entry(&ctx->tsgl,
-				       struct skcipher_sg_list, list);
-		sg = sgl->sg;
-
-		while (!sg->length)
-			sg++;
-
 		if (!ctx->used) {
 			err = skcipher_wait_for_data(sk, flags);
 			if (err)
@@ -674,6 +674,13 @@ static int skcipher_recvmsg_sync(struct socket *sock, struct msghdr *msg,
 		err = -EINVAL;
 		if (!used)
 			goto free;
+
+		sgl = list_first_entry(&ctx->tsgl,
+				       struct skcipher_sg_list, list);
+		sg = sgl->sg;
+
+		while (!sg->length)
+			sg++;
 
 		ablkcipher_request_set_crypt(&ctx->req, sg,
 					     ctx->rsgl.sg, used,
@@ -948,7 +955,8 @@ static int skcipher_accept_parent_nokey(void *private, struct sock *sk)
 	ask->private = ctx;
 
 	ablkcipher_request_set_tfm(&ctx->req, skcipher);
-	ablkcipher_request_set_callback(&ctx->req, CRYPTO_TFM_REQ_MAY_BACKLOG,
+	ablkcipher_request_set_callback(&ctx->req, CRYPTO_TFM_REQ_MAY_SLEEP|
+					CRYPTO_TFM_REQ_MAY_BACKLOG,
 					af_alg_complete, &ctx->completion);
 
 	sk->sk_destruct = skcipher_sock_destruct;

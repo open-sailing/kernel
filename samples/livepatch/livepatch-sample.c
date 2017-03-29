@@ -31,6 +31,7 @@
  * <your cmdline>
  *
  * $ insmod livepatch-sample.ko
+ * $ echo 1 > /sys/kernel/livepatch/livepatch_sample/enabled
  * $ cat /proc/cmdline
  * this has been live patched
  *
@@ -38,6 +39,16 @@
  * $ cat /proc/cmdline
  * <your cmdline>
  */
+
+void load_hook(void)
+{
+	printk(KERN_INFO "load_hook\n");
+}
+
+void unload_hook(void)
+{
+	printk(KERN_INFO "unload_hook\n");
+}
 
 #include <linux/seq_file.h>
 static int livepatch_cmdline_proc_show(struct seq_file *m, void *v)
@@ -53,10 +64,24 @@ static struct klp_func funcs[] = {
 	}, { }
 };
 
+static struct klp_hook hooks_load[] = {
+	{
+		.hook = load_hook
+	}, { }
+};
+
+static struct klp_hook hooks_unload[] = {
+	{
+		.hook = unload_hook
+	}, { }
+};
+
 static struct klp_object objs[] = {
 	{
 		/* name being NULL means vmlinux */
 		.funcs = funcs,
+		.hooks_load = hooks_load,
+		.hooks_unload = hooks_unload,
 	}, { }
 };
 
@@ -72,17 +97,11 @@ static int livepatch_init(void)
 	ret = klp_register_patch(&patch);
 	if (ret)
 		return ret;
-	ret = klp_enable_patch(&patch);
-	if (ret) {
-		WARN_ON(klp_unregister_patch(&patch));
-		return ret;
-	}
 	return 0;
 }
 
 static void livepatch_exit(void)
 {
-	WARN_ON(klp_disable_patch(&patch));
 	WARN_ON(klp_unregister_patch(&patch));
 }
 

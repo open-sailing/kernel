@@ -504,7 +504,12 @@ dwapb_gpio_get_pdata_of(struct device *dev)
 		 */
 		if (pp->idx == 0 &&
 		    of_property_read_bool(port_np, "interrupt-controller")) {
-			pp->irq = irq_of_parse_and_map(port_np, 0);
+			int irq, nr_irqs = 1;
+
+			of_property_read_u32(port_np, "hisi,nr-irqs", &nr_irqs);
+			for (irq = 0; irq < nr_irqs; irq++)
+				pp->irq = irq_of_parse_and_map(port_np, irq);
+
 			if (!pp->irq) {
 				dev_warn(dev, "no irq for bank %s\n",
 					 port_np->full_name);

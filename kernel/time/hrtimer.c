@@ -119,7 +119,7 @@ static void hrtimer_get_softirq_time(struct hrtimer_cpu_base *base)
 	ktime_t xtim, mono, boot, tai;
 	ktime_t off_real, off_boot, off_tai;
 
-	mono = ktime_get_update_offsets_tick(&off_real, &off_boot, &off_tai);
+	mono = ktime_get_update_offsets_now(&off_real, &off_boot, &off_tai);
 	boot = ktime_add(mono, off_boot);
 	xtim = ktime_add(mono, off_real);
 	tai = ktime_add(mono, off_tai);

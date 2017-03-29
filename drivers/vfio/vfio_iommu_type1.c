@@ -58,7 +58,7 @@ struct vfio_iommu {
 	struct mutex		lock;
 	struct rb_root		dma_list;
 	bool			v2;
-	bool			nesting;
+	int			attribute;
 };
 
 struct vfio_domain {
@@ -762,10 +762,17 @@ static int vfio_iommu_type1_attach_group(void *iommu_data,
 		goto out_free;
 	}
 
-	if (iommu->nesting) {
+	if (iommu->attribute & VFIO_IOMMU_ATTR_NESTING) {
 		int attr = 1;
 
 		ret = iommu_domain_set_attr(domain->domain, DOMAIN_ATTR_NESTING,
+					    &attr);
+		if (ret)
+			goto out_domain;
+	} else if (iommu->attribute & VFIO_IOMMU_ATTR_S2) {
+		int attr = 1;
+
+		ret = iommu_domain_set_attr(domain->domain, DOMAIN_ATTR_S2,
 					    &attr);
 		if (ret)
 			goto out_domain;
@@ -894,8 +901,6 @@ static void *vfio_iommu_type1_open(unsigned long arg)
 	switch (arg) {
 	case VFIO_TYPE1_IOMMU:
 		break;
-	case VFIO_TYPE1_NESTING_IOMMU:
-		iommu->nesting = true;
 	case VFIO_TYPE1v2_IOMMU:
 		iommu->v2 = true;
 		break;
@@ -962,7 +967,6 @@ static long vfio_iommu_type1_ioctl(void *iommu_data,
 		switch (arg) {
 		case VFIO_TYPE1_IOMMU:
 		case VFIO_TYPE1v2_IOMMU:
-		case VFIO_TYPE1_NESTING_IOMMU:
 			return 1;
 		case VFIO_DMA_CC_IOMMU:
 			if (!iommu)
@@ -1022,6 +1026,20 @@ static long vfio_iommu_type1_ioctl(void *iommu_data,
 
 		return copy_to_user((void __user *)arg, &unmap, minsz) ?
 			-EFAULT : 0;
+	} else if (cmd == VFIO_IOMMU_SET_ATTR) {
+		struct vfio_iommu_type1_attr attr;
+
+		minsz = offsetofend(struct vfio_iommu_type1_attr, attribute);
+
+		if (copy_from_user(&attr, (void __user *)arg, minsz))
+			return -EFAULT;
+
+		if (attr.argsz < minsz)
+			return -EINVAL;
+
+		iommu->attribute = attr.attribute;
+
+		return 0;
 	}
 
 	return -ENOTTY;

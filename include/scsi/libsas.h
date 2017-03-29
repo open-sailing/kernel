@@ -181,7 +181,8 @@ struct ssp_device {
 enum {
 	SAS_DEV_GONE,
 	SAS_DEV_FOUND, /* device notified to lldd */
-	SAS_DEV_DESTROY,
+	SAS_DEV_PROBE_FAIL,/* device probe fail */
+	SAS_DEV_DESTROY, /* device will be destroyed from system */
 	SAS_DEV_EH_PENDING,
 	SAS_DEV_LU_RESET,
 	SAS_DEV_RESET,
@@ -240,6 +241,7 @@ static inline void INIT_SAS_WORK(struct sas_work *sw, void (*fn)(struct work_str
 struct sas_discovery_event {
 	struct sas_work work;
 	struct asd_sas_port *port;
+	enum discover_event evt;
 };
 
 static inline struct sas_discovery_event *to_sas_discovery_event(struct work_struct *work)
@@ -268,7 +270,7 @@ struct asd_sas_port {
 	spinlock_t dev_list_lock;
 	struct list_head dev_list;
 	struct list_head disco_list;
-	struct list_head destroy_list;
+	struct list_head expander_list;
 	enum   sas_linkrate linkrate;
 
 	struct sas_work work;
@@ -649,6 +651,7 @@ struct sas_domain_function_template {
 	/* The class calls these when a device is found or gone. */
 	int  (*lldd_dev_found)(struct domain_device *);
 	void (*lldd_dev_gone)(struct domain_device *);
+	void (*lldd_before_dev_gone)(struct domain_device *);
 
 	int (*lldd_execute_task)(struct sas_task *, gfp_t gfp_flags);
 
@@ -702,7 +705,6 @@ void sas_init_ex_attr(void);
 int  sas_ex_revalidate_domain(struct domain_device *);
 
 void sas_unregister_domain_devices(struct asd_sas_port *port, int gone);
-void sas_init_disc(struct sas_discovery *disc, struct asd_sas_port *);
 int  sas_discover_event(struct asd_sas_port *, enum discover_event ev);
 
 int  sas_discover_sata(struct domain_device *);

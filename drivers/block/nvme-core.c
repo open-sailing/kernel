@@ -937,7 +937,8 @@ static int nvme_process_cq(struct nvme_queue *nvmeq)
 	if (head == nvmeq->cq_head && phase == nvmeq->cq_phase)
 		return 0;
 
-	writel(head, nvmeq->q_db + nvmeq->dev->db_stride);
+	if (likely(nvmeq->cq_vector >= 0))
+		writel(head, nvmeq->q_db + nvmeq->dev->db_stride);
 	nvmeq->cq_head = head;
 	nvmeq->cq_phase = phase;
 
@@ -1211,9 +1212,7 @@ static void nvme_abort_req(struct request *req)
 	struct nvme_command cmd;
 
 	if (!nvmeq->qid || cmd_rq->aborted) {
-		unsigned long flags;
-
-		spin_lock_irqsave(&dev_list_lock, flags);
+		spin_lock_irq(&dev_list_lock);
 		if (work_busy(&dev->reset_work))
 			goto out;
 		list_del_init(&dev->node);
@@ -1223,7 +1222,7 @@ static void nvme_abort_req(struct request *req)
 		dev->reset_workfn = nvme_reset_failed_dev;
 		queue_work(nvme_workq, &dev->reset_work);
  out:
-		spin_unlock_irqrestore(&dev_list_lock, flags);
+		spin_unlock_irq(&dev_list_lock);
 		return;
 	}
 
@@ -1293,9 +1292,7 @@ static enum blk_eh_timer_return nvme_timeout(struct request *req, bool reserved)
 
 	dev_warn(nvmeq->q_dmadev, "Timeout I/O %d QID %d\n", req->tag,
 							nvmeq->qid);
-	spin_lock_irq(&nvmeq->q_lock);
 	nvme_abort_req(req);
-	spin_unlock_irq(&nvmeq->q_lock);
 
 	/*
 	 * The aborted req will be completed on receiving the abort req.
@@ -2475,6 +2472,10 @@ static void nvme_del_queue_end(struct nvme_queue *nvmeq)
 {
 	struct nvme_delq_ctx *dq = nvmeq->cmdinfo.ctx;
 	nvme_put_dq(dq);
+
+	spin_lock_irq(&nvmeq->q_lock);
+	nvme_process_cq(nvmeq);
+	spin_unlock_irq(&nvmeq->q_lock);
 }
 
 static int adapter_async_del_queue(struct nvme_queue *nvmeq, u8 opcode,
@@ -2733,7 +2734,8 @@ static void nvme_free_dev(struct kref *kref)
 	nvme_free_namespaces(dev);
 	nvme_release_instance(dev);
 	blk_mq_free_tag_set(&dev->tagset);
-	blk_put_queue(dev->admin_q);
+	if (dev->admin_q)
+		blk_put_queue(dev->admin_q);
 	kfree(dev->queues);
 	kfree(dev->entry);
 	kfree(dev);

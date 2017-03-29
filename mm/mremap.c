@@ -275,6 +275,12 @@ static unsigned long move_vma(struct vm_area_struct *vma,
 	moved_len = move_page_tables(vma, old_addr, new_vma, new_addr, old_len,
 				     need_rmap_locks);
 	if (moved_len < old_len) {
+		err = -ENOMEM;
+	} else if (vma->vm_file && vma->vm_file->f_op->mremap) {
+		err = vma->vm_file->f_op->mremap(vma->vm_file, new_vma);
+	}
+
+	if (unlikely(err)) {
 		/*
 		 * On error, move entries back from new area to old,
 		 * which will succeed since page tables still there,
@@ -285,14 +291,16 @@ static unsigned long move_vma(struct vm_area_struct *vma,
 		vma = new_vma;
 		old_len = new_len;
 		old_addr = new_addr;
-		new_addr = -ENOMEM;
-	} else if (vma->vm_file && vma->vm_file->f_op->mremap) {
-		err = vma->vm_file->f_op->mremap(vma->vm_file, new_vma);
-		if (err < 0) {
-			move_page_tables(new_vma, new_addr, vma, old_addr,
-					 moved_len, true);
-			return err;
-		}
+		new_addr = err;
+	} else {
+#ifdef CONFIG_ARCH_WANT_VDSO_MAP
+		/*
+		 * mremap() doesn't allow moving multiple vmas so we can limit the
+		 * check to old_addr == vdso.
+		 */
+		if (old_addr == mm->context.vdso)
+			mm->context.vdso = new_addr;
+#endif  /* CONFIG_ARCH_WANT_VDSO_MAP */
 	}
 
 	/* Conceal VM_ACCOUNT so old reservation is not undone */

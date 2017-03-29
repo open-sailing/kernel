@@ -3,6 +3,7 @@
 
 config TILE
 	def_bool y
+	select ARCH_32BIT_OFF_T if !64BIT
 	select HAVE_PERF_EVENTS
 	select USE_PMC if PERF_EVENTS
 	select HAVE_DMA_ATTRS
@@ -28,6 +29,7 @@ config TILE
 	select HAVE_DEBUG_STACKOVERFLOW
 	select ARCH_WANT_FRAME_POINTERS
 	select HAVE_CONTEXT_TRACKING
+	select EDAC_SUPPORT
 
 # FIXME: investigate whether we need/want these options.
 #	select HAVE_IOREMAP_PROT

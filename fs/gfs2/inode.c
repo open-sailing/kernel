@@ -1622,7 +1622,7 @@ int gfs2_permission(struct inode *inode, int mask)
 	}
 
 	if ((mask & MAY_WRITE) && IS_IMMUTABLE(inode))
-		error = -EACCES;
+		error = -EPERM;
 	else
 		error = generic_permission(inode, mask);
 	if (unlock)
@@ -1759,7 +1759,7 @@ static int gfs2_setattr(struct dentry *dentry, struct iattr *attr)
 	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
 		goto out;
 
-	error = inode_change_ok(inode, attr);
+	error = setattr_prepare(dentry, attr);
 	if (error)
 		goto out;
 

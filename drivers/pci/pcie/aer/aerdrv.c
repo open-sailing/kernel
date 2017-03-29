@@ -41,6 +41,8 @@ MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE("GPL");
 
+struct workqueue_struct *aer_wq = NULL;
+
 static int aer_probe(struct pcie_device *dev);
 static void aer_remove(struct pcie_device *dev);
 static pci_ers_result_t aer_error_detected(struct pci_dev *dev,
@@ -236,7 +238,7 @@ irqreturn_t aer_irq(int irq, void *context)
 	spin_unlock_irqrestore(&rpc->e_lock, flags);
 
 	/*  Invoke DPC handler */
-	schedule_work(&rpc->dpc_handler);
+	queue_work(aer_wq, &rpc->dpc_handler);
 
 	return IRQ_HANDLED;
 }
@@ -315,6 +317,15 @@ static int aer_probe(struct pcie_device *dev)
 		dev_printk(KERN_DEBUG, device, "alloc rpc failed\n");
 		aer_remove(dev);
 		return -ENOMEM;
+	}
+
+	if (!aer_wq) {
+		aer_wq = alloc_workqueue("aer-wq", 0, 0);
+		if (!aer_wq) {
+			dev_printk(KERN_DEBUG, device, "alloc aer wq failed\n");
+			aer_remove(dev);
+			return -ENOMEM;
+		}
 	}
 
 	/* Request IRQ ISR */

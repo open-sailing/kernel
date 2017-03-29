@@ -173,6 +173,14 @@ static __init void reserve_regions(void)
 	if (uefi_debug)
 		pr_info("Processing EFI memory map:\n");
 
+	/*
+	 * Discard memblocks discovered so far: if there are any at this
+	 * point, they originate from memory nodes in the DT, and UEFI
+	 * uses its own memory map instead.
+	 */
+	memblock_dump_all();
+	memblock_remove(0, ULLONG_MAX);
+
 	for_each_efi_memory_desc(&memmap, md) {
 		paddr = md->phys_addr;
 		npages = md->num_pages;
@@ -358,13 +366,4 @@ void efi_virtmap_unload(void)
 {
 	efi_set_pgd(current->active_mm);
 	preempt_enable();
-}
-
-/*
- * UpdateCapsule() depends on the system being shutdown via
- * ResetSystem().
- */
-bool efi_poweroff_required(void)
-{
-	return efi_enabled(EFI_RUNTIME_SERVICES);
 }

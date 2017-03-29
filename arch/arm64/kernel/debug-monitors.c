@@ -23,6 +23,7 @@
 #include <linux/hardirq.h>
 #include <linux/init.h>
 #include <linux/ptrace.h>
+#include <linux/kprobes.h>
 #include <linux/stat.h>
 #include <linux/uaccess.h>
 
@@ -46,6 +47,7 @@ static void mdscr_write(u32 mdscr)
 	asm volatile("msr mdscr_el1, %0" :: "r" (mdscr));
 	local_dbg_restore(flags);
 }
+NOKPROBE_SYMBOL(mdscr_write);
 
 static u32 mdscr_read(void)
 {
@@ -53,6 +55,7 @@ static u32 mdscr_read(void)
 	asm volatile("mrs %0, mdscr_el1" : "=r" (mdscr));
 	return mdscr;
 }
+NOKPROBE_SYMBOL(mdscr_read);
 
 /*
  * Allow root to disable self-hosted debug from userspace.
@@ -82,7 +85,7 @@ early_param("nodebugmon", early_debug_disable);
 static DEFINE_PER_CPU(int, mde_ref_count);
 static DEFINE_PER_CPU(int, kde_ref_count);
 
-void enable_debug_monitors(enum debug_el el)
+void enable_debug_monitors(enum debug_elx el)
 {
 	u32 mdscr, enable = 0;
 
@@ -101,8 +104,9 @@ void enable_debug_monitors(enum debug_el el)
 		mdscr_write(mdscr);
 	}
 }
+NOKPROBE_SYMBOL(enable_debug_monitors);
 
-void disable_debug_monitors(enum debug_el el)
+void disable_debug_monitors(enum debug_elx el)
 {
 	u32 mdscr, disable = 0;
 
@@ -121,6 +125,7 @@ void disable_debug_monitors(enum debug_el el)
 		mdscr_write(mdscr);
 	}
 }
+NOKPROBE_SYMBOL(disable_debug_monitors);
 
 /*
  * OS lock clearing.
@@ -171,6 +176,7 @@ static void set_regs_spsr_ss(struct pt_regs *regs)
 	spsr |= DBG_SPSR_SS;
 	regs->pstate = spsr;
 }
+NOKPROBE_SYMBOL(set_regs_spsr_ss);
 
 static void clear_regs_spsr_ss(struct pt_regs *regs)
 {
@@ -180,6 +186,7 @@ static void clear_regs_spsr_ss(struct pt_regs *regs)
 	spsr &= ~DBG_SPSR_SS;
 	regs->pstate = spsr;
 }
+NOKPROBE_SYMBOL(clear_regs_spsr_ss);
 
 /* EL1 Single Step Handler hooks */
 static LIST_HEAD(step_hook);
@@ -223,11 +230,13 @@ static int call_step_hook(struct pt_regs *regs, unsigned int esr)
 
 	return retval;
 }
+NOKPROBE_SYMBOL(call_step_hook);
 
 static int single_step_handler(unsigned long addr, unsigned int esr,
 			       struct pt_regs *regs)
 {
 	siginfo_t info;
+	bool handler_found = false;
 
 	/*
 	 * If we are stepping a pending breakpoint, call the hw_breakpoint
@@ -236,7 +245,14 @@ static int single_step_handler(unsigned long addr, unsigned int esr,
 	if (!reinstall_suspended_bps(regs))
 		return 0;
 
-	if (user_mode(regs)) {
+#ifdef	CONFIG_KPROBES
+	if (kprobe_single_step_handler(regs, esr) == DBG_HOOK_HANDLED)
+		handler_found = true;
+#endif
+	if (!handler_found && call_step_hook(regs, esr) == DBG_HOOK_HANDLED)
+		handler_found = true;
+
+	if (!handler_found && user_mode(regs)) {
 		info.si_signo = SIGTRAP;
 		info.si_errno = 0;
 		info.si_code  = TRAP_HWBKPT;
@@ -250,10 +266,7 @@ static int single_step_handler(unsigned long addr, unsigned int esr,
 		 * to the active-not-pending state).
 		 */
 		user_rewind_single_step(current);
-	} else {
-		if (call_step_hook(regs, esr) == DBG_HOOK_HANDLED)
-			return 0;
-
+	} else if (!handler_found) {
 		pr_warning("Unexpected kernel single-step exception at EL1\n");
 		/*
 		 * Re-enable stepping since we know that we will be
@@ -264,6 +277,7 @@ static int single_step_handler(unsigned long addr, unsigned int esr,
 
 	return 0;
 }
+NOKPROBE_SYMBOL(single_step_handler);
 
 /*
  * Breakpoint handler is re-entrant as another breakpoint can
@@ -301,13 +315,24 @@ static int call_break_hook(struct pt_regs *regs, unsigned int esr)
 
 	return fn ? fn(regs, esr) : DBG_HOOK_ERROR;
 }
+NOKPROBE_SYMBOL(call_break_hook);
 
 static int brk_handler(unsigned long addr, unsigned int esr,
 		       struct pt_regs *regs)
 {
 	siginfo_t info;
+	bool handler_found = false;
 
-	if (user_mode(regs)) {
+#ifdef	CONFIG_KPROBES
+	if ((esr & BRK64_ESR_MASK) == BRK64_ESR_KPROBES) {
+		if (kprobe_breakpoint_handler(regs, esr) == DBG_HOOK_HANDLED)
+			handler_found = true;
+	}
+#endif
+	if (!handler_found && call_break_hook(regs, esr) == DBG_HOOK_HANDLED)
+		handler_found = true;
+
+	if (!handler_found && user_mode(regs)) {
 		info = (siginfo_t) {
 			.si_signo = SIGTRAP,
 			.si_errno = 0,
@@ -316,13 +341,14 @@ static int brk_handler(unsigned long addr, unsigned int esr,
 		};
 
 		force_sig_info(SIGTRAP, &info, current);
-	} else if (call_break_hook(regs, esr) != DBG_HOOK_HANDLED) {
+	} else if (!handler_found) {
 		pr_warning("Unexpected kernel BRK exception at EL1\n");
 		return -EFAULT;
 	}
 
 	return 0;
 }
+NOKPROBE_SYMBOL(brk_handler);
 
 int aarch32_break_handler(struct pt_regs *regs)
 {
@@ -367,6 +393,7 @@ int aarch32_break_handler(struct pt_regs *regs)
 	force_sig_info(SIGTRAP, &info, current);
 	return 0;
 }
+NOKPROBE_SYMBOL(aarch32_break_handler);
 
 static int __init debug_traps_init(void)
 {
@@ -388,12 +415,14 @@ void user_rewind_single_step(struct task_struct *task)
 	if (test_ti_thread_flag(task_thread_info(task), TIF_SINGLESTEP))
 		set_regs_spsr_ss(task_pt_regs(task));
 }
+NOKPROBE_SYMBOL(user_rewind_single_step);
 
 void user_fastforward_single_step(struct task_struct *task)
 {
 	if (test_ti_thread_flag(task_thread_info(task), TIF_SINGLESTEP))
 		clear_regs_spsr_ss(task_pt_regs(task));
 }
+NOKPROBE_SYMBOL(user_fastforward_single_step);
 
 /* Kernel API */
 void kernel_enable_single_step(struct pt_regs *regs)
@@ -403,28 +432,52 @@ void kernel_enable_single_step(struct pt_regs *regs)
 	mdscr_write(mdscr_read() | DBG_MDSCR_SS);
 	enable_debug_monitors(DBG_ACTIVE_EL1);
 }
+NOKPROBE_SYMBOL(kernel_enable_single_step);
 
-void kernel_disable_single_step(void)
+void kernel_enable_single_step_noregs(void)
+{
+	WARN_ON(!irqs_disabled());
+	mdscr_write(mdscr_read() | DBG_MDSCR_SS);
+	enable_debug_monitors(DBG_ACTIVE_EL1);
+}
+NOKPROBE_SYMBOL(kernel_enable_single_step_noregs);
+
+void kernel_disable_single_step(struct pt_regs *regs)
+{
+	WARN_ON(!irqs_disabled());
+	regs->flags = 0;
+	mdscr_write(mdscr_read() & ~DBG_MDSCR_SS);
+	disable_debug_monitors(DBG_ACTIVE_EL1);
+}
+NOKPROBE_SYMBOL(kernel_disable_single_step);
+
+void kernel_disable_single_step_noregs(void)
 {
 	WARN_ON(!irqs_disabled());
 	mdscr_write(mdscr_read() & ~DBG_MDSCR_SS);
 	disable_debug_monitors(DBG_ACTIVE_EL1);
 }
+NOKPROBE_SYMBOL(kernel_disable_single_step_noregs);
 
 int kernel_active_single_step(void)
 {
 	WARN_ON(!irqs_disabled());
 	return mdscr_read() & DBG_MDSCR_SS;
 }
+NOKPROBE_SYMBOL(kernel_active_single_step);
 
 /* ptrace API */
 void user_enable_single_step(struct task_struct *task)
 {
-	set_ti_thread_flag(task_thread_info(task), TIF_SINGLESTEP);
-	set_regs_spsr_ss(task_pt_regs(task));
+	struct thread_info *ti = task_thread_info(task);
+
+	if (!test_and_set_ti_thread_flag(ti, TIF_SINGLESTEP))
+		set_regs_spsr_ss(task_pt_regs(task));
 }
+NOKPROBE_SYMBOL(user_enable_single_step);
 
 void user_disable_single_step(struct task_struct *task)
 {
 	clear_ti_thread_flag(task_thread_info(task), TIF_SINGLESTEP);
 }
+NOKPROBE_SYMBOL(user_disable_single_step);

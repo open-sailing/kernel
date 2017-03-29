@@ -229,7 +229,8 @@ struct tty_port {
 	wait_queue_head_t	open_wait;	/* Open waiters */
 	wait_queue_head_t	close_wait;	/* Close waiters */
 	wait_queue_head_t	delta_msr_wait;	/* Modem status change */
-	unsigned long		flags;		/* TTY flags ASY_*/
+	unsigned long		flags;		/* User TTY flags ASYNC_ */
+	unsigned long		iflags;		/* Internal flags TTY_PORT_ */
 	unsigned char		console:1,	/* port is a console */
 				low_latency:1;	/* optional: tune for latency */
 	struct mutex		mutex;		/* Locking */
@@ -242,6 +243,18 @@ struct tty_port {
 						   set to size of fifo */
 	struct kref		kref;		/* Ref counter */
 };
+
+/* tty_port::iflags bits -- use atomic bit ops */
+#define TTY_PORT_INITIALIZED	0	/* device is initialized */
+#define TTY_PORT_SUSPENDED	1	/* device is suspended */
+#define TTY_PORT_ACTIVE		2	/* device is open */
+
+/*
+ * uart drivers: use the uart_port::status field and the UPSTAT_* defines
+ * for s/w-based flow control steering and carrier detection status
+ */
+#define TTY_PORT_CTS_FLOW	3	/* h/w flow control enabled */
+#define TTY_PORT_CHECK_CD	4	/* carrier detect enabled */
 
 /*
  * Where all of the state associated with a tty is kept while the tty
@@ -496,7 +509,8 @@ extern int tty_set_termios(struct tty_struct *tty, struct ktermios *kt);
 extern struct tty_ldisc *tty_ldisc_ref(struct tty_struct *);
 extern void tty_ldisc_deref(struct tty_ldisc *);
 extern struct tty_ldisc *tty_ldisc_ref_wait(struct tty_struct *);
-extern void tty_ldisc_hangup(struct tty_struct *tty);
+extern void tty_ldisc_hangup(struct tty_struct *tty, bool reset);
+extern int tty_ldisc_reinit(struct tty_struct *tty, int disc);
 extern const struct file_operations tty_ldiscs_proc_fops;
 
 extern void tty_wakeup(struct tty_struct *tty);
@@ -549,7 +563,67 @@ static inline struct tty_port *tty_port_get(struct tty_port *port)
 /* If the cts flow control is enabled, return true. */
 static inline bool tty_port_cts_enabled(struct tty_port *port)
 {
-	return port->flags & ASYNC_CTS_FLOW;
+	return test_bit(TTY_PORT_CTS_FLOW, &port->iflags);
+}
+
+static inline void tty_port_set_cts_flow(struct tty_port *port, bool val)
+{
+	if (val)
+		set_bit(TTY_PORT_CTS_FLOW, &port->iflags);
+	else
+		clear_bit(TTY_PORT_CTS_FLOW, &port->iflags);
+}
+
+static inline bool tty_port_active(struct tty_port *port)
+{
+	return test_bit(TTY_PORT_ACTIVE, &port->iflags);
+}
+
+static inline void tty_port_set_active(struct tty_port *port, bool val)
+{
+	if (val)
+		set_bit(TTY_PORT_ACTIVE, &port->iflags);
+	else
+		clear_bit(TTY_PORT_ACTIVE, &port->iflags);
+}
+
+static inline bool tty_port_check_carrier(struct tty_port *port)
+{
+	return test_bit(TTY_PORT_CHECK_CD, &port->iflags);
+}
+
+static inline void tty_port_set_check_carrier(struct tty_port *port, bool val)
+{
+	if (val)
+		set_bit(TTY_PORT_CHECK_CD, &port->iflags);
+	else
+		clear_bit(TTY_PORT_CHECK_CD, &port->iflags);
+}
+
+static inline bool tty_port_suspended(struct tty_port *port)
+{
+	return test_bit(TTY_PORT_SUSPENDED, &port->iflags);
+}
+
+static inline void tty_port_set_suspended(struct tty_port *port, bool val)
+{
+	if (val)
+		set_bit(TTY_PORT_SUSPENDED, &port->iflags);
+	else
+		clear_bit(TTY_PORT_SUSPENDED, &port->iflags);
+}
+
+static inline bool tty_port_initialized(struct tty_port *port)
+{
+	return test_bit(TTY_PORT_INITIALIZED, &port->iflags);
+}
+
+static inline void tty_port_set_initialized(struct tty_port *port, bool val)
+{
+	if (val)
+		set_bit(TTY_PORT_INITIALIZED, &port->iflags);
+	else
+		clear_bit(TTY_PORT_INITIALIZED, &port->iflags);
 }
 
 extern struct tty_struct *tty_port_tty_get(struct tty_port *port);
@@ -578,7 +652,7 @@ static inline int tty_port_users(struct tty_port *port)
 
 extern int tty_register_ldisc(int disc, struct tty_ldisc_ops *new_ldisc);
 extern int tty_unregister_ldisc(int disc);
-extern int tty_set_ldisc(struct tty_struct *tty, int ldisc);
+extern int tty_set_ldisc(struct tty_struct *tty, int disc);
 extern int tty_ldisc_setup(struct tty_struct *tty, struct tty_struct *o_tty);
 extern void tty_ldisc_release(struct tty_struct *tty);
 extern void tty_ldisc_init(struct tty_struct *tty);

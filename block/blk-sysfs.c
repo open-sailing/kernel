@@ -6,11 +6,12 @@
 #include <linux/module.h>
 #include <linux/bio.h>
 #include <linux/blkdev.h>
+#include <linux/backing-dev.h>
 #include <linux/blktrace_api.h>
 #include <linux/blk-mq.h>
+#include <linux/blk-cgroup.h>
 
 #include "blk.h"
-#include "blk-cgroup.h"
 #include "blk-mq.h"
 
 struct queue_sysfs_entry {
@@ -501,6 +502,7 @@ static void blk_release_queue(struct kobject *kobj)
 	struct request_queue *q =
 		container_of(kobj, struct request_queue, kobj);
 
+	bdi_exit(&q->backing_dev_info);
 	blkcg_exit_queue(q);
 
 	if (q->elevator) {

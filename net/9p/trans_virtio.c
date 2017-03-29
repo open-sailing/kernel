@@ -51,7 +51,11 @@
 #include <linux/virtio_9p.h>
 #include "trans_common.h"
 
-#define VIRTQUEUE_NUM	128
+#if defined(CONFIG_KVM_GUEST_MICROVM)
+#define VIRTQUEUE_NUM	64
+#else
+#define VIRTQUEUE_NUM  128
+#endif /* CONFIG_KVM_GUEST_MICROVM */
 
 /* a single mutex to manage channel initialization and attachment */
 static DEFINE_MUTEX(virtio_9p_lock);

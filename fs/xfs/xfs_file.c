@@ -41,6 +41,7 @@
 #include <linux/dcache.h>
 #include <linux/falloc.h>
 #include <linux/pagevec.h>
+#include <linux/backing-dev.h>
 
 static const struct vm_operations_struct xfs_file_vm_ops;
 
@@ -973,7 +974,7 @@ xfs_file_fallocate(
 
 		iattr.ia_valid = ATTR_SIZE;
 		iattr.ia_size = new_size;
-		error = xfs_setattr_size(ip, &iattr);
+		error = xfs_vn_setattr_size(file->f_path.dentry, &iattr);
 		if (error)
 			goto out_unlock;
 	}

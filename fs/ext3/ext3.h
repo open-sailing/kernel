@@ -678,6 +678,7 @@ struct ext3_sb_info {
 	char *s_qf_names[EXT3_MAXQUOTAS];	/* Names of quota files with journalled quota */
 	int s_jquota_fmt;			/* Format of quota to use */
 #endif
+	struct mb_cache *s_mb_cache;
 };
 
 static inline spinlock_t *

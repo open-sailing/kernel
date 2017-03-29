@@ -14,6 +14,7 @@
 #include <linux/mutex.h>
 #include <linux/rcupdate.h>
 #include <linux/percpu-refcount.h>
+#include <linux/percpu-rwsem.h>
 #include <linux/workqueue.h>
 
 #ifdef CONFIG_CGROUPS
@@ -32,11 +33,16 @@ struct kernfs_open_file;
 
 /* define the enumeration of all cgroup subsystems */
 #define SUBSYS(_x) _x ## _cgrp_id,
+#define SUBSYS_TAG(_t) CGROUP_ ## _t, \
+	__unused_tag_ ## _t = CGROUP_ ## _t - 1,
 enum cgroup_subsys_id {
 #include <linux/cgroup_subsys.h>
 	CGROUP_SUBSYS_COUNT,
 };
+#undef SUBSYS_TAG
 #undef SUBSYS
+
+#define CGROUP_CANFORK_COUNT (CGROUP_CANFORK_END - CGROUP_CANFORK_START)
 
 /* bits in struct cgroup_subsys_state flags field */
 enum {
@@ -195,6 +201,12 @@ struct css_set {
 	 */
 	struct list_head e_cset_node[CGROUP_SUBSYS_COUNT];
 
+	/* all css_task_iters currently walking this cset */
+	struct list_head task_iters;
+
+	/* dead and being drained, ignore for migration */
+	bool dead;
+
 	/* For RCU-protected deletion */
 	struct rcu_head rcu_head;
 };
@@ -216,10 +228,10 @@ struct cgroup {
 	int id;
 
 	/*
-	 * If this cgroup contains any tasks, it contributes one to
-	 * populated_cnt.  All children with non-zero popuplated_cnt of
-	 * their own contribute one.  The count is zero iff there's no task
-	 * in this cgroup or its subtree.
+	 * Each non-empty css_set associated with this cgroup contributes
+	 * one to populated_cnt.  All children with non-zero popuplated_cnt
+	 * of their own contribute one.  The count is zero iff there's no
+	 * task in this cgroup or its subtree.
 	 */
 	int populated_cnt;
 
@@ -290,6 +302,9 @@ struct cgroup_root {
 
 	/* Number of cgroups in the hierarchy, used only for /proc/cgroups */
 	atomic_t nr_cgrps;
+
+	/* Wait while cgroups are being destroyed */
+	wait_queue_head_t wait;
 
 	/* A list running through the active hierarchies */
 	struct list_head root_list;
@@ -403,16 +418,15 @@ struct cgroup_subsys {
 	void (*css_reset)(struct cgroup_subsys_state *css);
 	void (*css_e_css_changed)(struct cgroup_subsys_state *css);
 
-	int (*can_attach)(struct cgroup_subsys_state *css,
-			  struct cgroup_taskset *tset);
-	void (*cancel_attach)(struct cgroup_subsys_state *css,
-			      struct cgroup_taskset *tset);
-	void (*attach)(struct cgroup_subsys_state *css,
-		       struct cgroup_taskset *tset);
-	void (*fork)(struct task_struct *task);
-	void (*exit)(struct cgroup_subsys_state *css,
-		     struct cgroup_subsys_state *old_css,
-		     struct task_struct *task);
+	int (*can_attach)(struct cgroup_taskset *tset);
+	void (*cancel_attach)(struct cgroup_taskset *tset);
+	void (*attach)(struct cgroup_taskset *tset);
+	void (*post_attach)(void);
+	int (*can_fork)(struct task_struct *task, void **priv_p);
+	void (*cancel_fork)(struct task_struct *task, void *priv);
+	void (*fork)(struct task_struct *task, void *priv);
+	void (*exit)(struct task_struct *task);
+	void (*free)(struct task_struct *task);
 	void (*bind)(struct cgroup_subsys_state *root_css);
 
 	int disabled;
@@ -466,5 +480,40 @@ struct cgroup_subsys {
 	unsigned int depends_on;
 };
 
-#endif	/* CONFIG_CGROUPS */
+extern struct percpu_rw_semaphore cgroup_threadgroup_rwsem;
+
+/**
+ * cgroup_threadgroup_change_begin - threadgroup exclusion for cgroups
+ * @tsk: target task
+ *
+ * Called from threadgroup_change_begin() and allows cgroup operations to
+ * synchronize against threadgroup changes using a percpu_rw_semaphore.
+ */
+static inline void cgroup_threadgroup_change_begin(struct task_struct *tsk)
+{
+	percpu_down_read(&cgroup_threadgroup_rwsem);
+}
+
+/**
+ * cgroup_threadgroup_change_end - threadgroup exclusion for cgroups
+ * @tsk: target task
+ *
+ * Called from threadgroup_change_end().  Counterpart of
+ * cgroup_threadcgroup_change_begin().
+ */
+static inline void cgroup_threadgroup_change_end(struct task_struct *tsk)
+{
+	percpu_up_read(&cgroup_threadgroup_rwsem);
+}
+
+#else  /* CONFIG_CGROUPS */
+
+static inline void cgroup_threadgroup_change_begin(struct task_struct *tsk) {}
+static inline void cgroup_threadgroup_change_end(struct task_struct *tsk) {}
+
+#define CGROUP_CANFORK_COUNT 0
+#define CGROUP_SUBSYS_COUNT 0
+
+#endif  /* CONFIG_CGROUPS */
+
 #endif	/* _LINUX_CGROUP_DEFS_H */

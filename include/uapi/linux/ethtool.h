@@ -1190,6 +1190,8 @@ enum ethtool_sfeatures_retval_bits {
 #define ETHTOOL_GTUNABLE	0x00000048 /* Get tunable configuration */
 #define ETHTOOL_STUNABLE	0x00000049 /* Set tunable configuration */
 
+#define ETHTOOL_SRELAXORDER     0x00000050 /* Set relax ordering mode, on or off*/
+
 /* compatibility with older code */
 #define SPARC_ETH_GSET		ETHTOOL_GSET
 #define SPARC_ETH_SSET		ETHTOOL_SSET
@@ -1280,6 +1282,10 @@ enum ethtool_sfeatures_retval_bits {
 #define DUPLEX_HALF		0x00
 #define DUPLEX_FULL		0x01
 #define DUPLEX_UNKNOWN		0xff
+
+/* Relax Ordering mode, on or off. */
+#define RELAXORDER_OFF          0x00
+#define RELAXORDER_ON           0x01
 
 /* Which connector port. */
 #define PORT_TP			0x00

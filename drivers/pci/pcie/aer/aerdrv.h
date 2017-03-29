@@ -104,6 +104,7 @@ static inline pci_ers_result_t merge_result(enum pci_ers_result orig,
 	return orig;
 }
 
+extern struct workqueue_struct *aer_wq;
 extern struct bus_type pcie_port_bus_type;
 int aer_init(struct pcie_device *dev);
 void aer_isr(struct work_struct *work);

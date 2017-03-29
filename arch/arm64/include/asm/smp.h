@@ -73,4 +73,9 @@ extern int __cpu_disable(void);
 extern void __cpu_die(unsigned int cpu);
 extern void cpu_die(void);
 
+/*
+ * for crash dump
+ */
+extern void smp_send_crash_stop(void);
+
 #endif /* ifndef __ASM_SMP_H */

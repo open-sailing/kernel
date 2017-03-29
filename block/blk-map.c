@@ -69,7 +69,7 @@ int blk_rq_map_user_iov(struct request_queue *q, struct request *rq,
 	struct iov_iter i;
 	struct iovec iov;
 
-	if (!iter || !iter->count)
+	if (!iter || !iter->count || !iter_is_iovec(iter))
 		return -EINVAL;
 
 	iov_for_each(iov, i, *iter) {

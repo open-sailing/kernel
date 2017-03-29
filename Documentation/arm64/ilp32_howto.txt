@@ -1,0 +1,97 @@
+                        ILP32 Howto
+                        ===========
+
+Author: Bamvor Jian Zhang <bamvor.zhangjian@huawei.com>
+Date  : 19 January 2015
+
+This document describe what does ILP32 mean and how to use it.
+
+What does ILP32 mean
+--------------------
+
+ILP32 is a method for running 32bit application on 64bit platform, such
+binary is elf32 with aarch64 assembly and is compiled by 64bit compiler.
+Refer the following table:
+
+  \-            |  arm 32bit  | arm64 ILP32 | arm64 LP64
+----------------|-------------|-------------|-------------
+instruction set |   armv7-a   |   armv8-a   |   armv8-a
+int             |   32bit     |   32bit     |   32bit
+long            |   32bit     | **32bit**   |   64bit
+pointer         |   32bit     | **32bit**   |   64bit
+
+LP64 is the default ABI on arm64(Implies -mabi=lp64 while compiling), and the
+kernel remains in LP64 no matter ILP32 enables or not. After enable ILP32, the
+vdso for ilp32 is elf32:
+    > find arch/arm64/kernel -name "*.so" | xargs file
+    arch/arm64/kernel/vdso-ilp32/vdso-ilp32.so: ELF 32-bit MSB shared object,
+    ARM aarch64, version 1 (SYSV), dynamically linked, stripped
+    arch/arm64/kernel/vdso/vdso.so:             ELF 64-bit MSB shared object,
+    ARM aarch64, version 1 (SYSV), dynamically linked, stripped
+
+Requirement for ILP32 system
+----------------------------
+
+1.  Kernel:
+    Enable CONFIG_ARM64_ILP32.
+
+2.  Gcc:
+    Gcc support ILP32 from gcc-4.9. It should be compiled with ILP32
+    enabled libc.
+
+3.  Libc: The glibc branch for ILP32:
+    <code.huawei.com/z00293696/glibc/tree/ilp32-new-api-cavium>
+
+How to use it
+-------------
+
+One could use "-mabi=ilp32" to for building ilp32 binaries, for example:
+    > cat main.c
+        int main(){return 0;}
+    > /path/to/aarch64-linux-gnu-gcc -o main main.c -mabi=ilp32
+    > file main
+    main: ELF 32-bit MSB executable, ARM aarch64, version 1 (SYSV), dynamically
+    linked (uses shared libs), for GNU/Linux 3.16.0, not stripped
+
+Usually, for building a package, one could change the CC and CXX during
+configure:
+    > CC="/path/to/aarch64-linux-gnu-gcc -mabi=ilp32"
+      CXX="/path/to/aarch64-linux-gnu-g++ -mabi=ilp32"
+      ./configure your_parameters_here
+
+It works for most of the packages. If it failed in linking: try to pass the
+following parameter to linker(e.g. through gcc):
+For little endian: `-Xlinker -maarch64linux32`
+For big endian: `-Xlinker -EB -Xlinker -maarch64linux32b`
+
+Testcases
+---------
+
+Currently, most of the LTP testcase of ILP32 is passed base on a LP64 root
+filesystem. It is tested on both little endian and big endian filesytem.
+Refer the [bugzilla](http://rnd-openeuler.huawei.com/bugzilla/) for
+opening/closed issue.
+
+Misc
+----
+
+Aarch32 EL0, arm64 ILP32 and arm64 LP64 could live together with the proper
+linker in filesytem:
+
+    > ll lib/ld* -d
+    -rwxr-xr-x 1 root   root  726382 Nov 14  2013 lib/ld-2.20.so
+    lrwxrwxrwx 1 root   root      22 Dec 17 13:14 lib/ld-linux-aarch64_be_ilp32.so.1 -> ../libilp32/ld-2.20.so
+    lrwxrwxrwx 1 output users     10 Dec 17 13:14 lib/ld-linux-aarch64_be.so.1 -> ../lib64/ld-2.20.so
+    lrwxrwxrwx 1 root   root      12 Nov 12 15:27 lib/ld-linux.so.3 -> ld-2.20.so
+
+    /lib/ld-2.20.so: arm 32bit linker. /lib includes arm 32bit library.
+    /lib64/ld-2.20.so: arm64 LP64 linker. /lib64 includes arm64 LP64 library.
+    /libilp32/ld-2.20.so: arm64 ILP32 linker. /libilp32 includes arm64 ILP32 library.
+
+Trouble shooting
+----------------
+
+After apply the ILP32 patches, the CONFIG_COMPAT will not enable the aarch32
+EL0, use CONFIG_AACH32_EL0 instead, it is the default value in current
+defconfig.
+

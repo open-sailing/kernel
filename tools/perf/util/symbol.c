@@ -1355,7 +1355,7 @@ static bool dso__is_compatible_symtab_type(struct dso *dso, bool kmod,
 	case DSO_BINARY_TYPE__SYSTEM_PATH_KMODULE_COMP:
 		/*
 		 * kernel modules know their symtab type - it's set when
-		 * creating a module dso in machine__new_module().
+		 * creating a module dso in machine__findnew_module_map().
 		 */
 		return kmod && dso->symtab_type == type;
 
@@ -1479,6 +1479,10 @@ int dso__load(struct dso *dso, struct map *map, symbol_filter_t filter)
 	/* We'll have to hope for the best */
 	if (!runtime_ss && syms_ss)
 		runtime_ss = syms_ss;
+
+	if (syms_ss && syms_ss->type == DSO_BINARY_TYPE__BUILD_ID_CACHE)
+		if (dso__build_id_is_kmod(dso, name, PATH_MAX))
+			kmod = true;
 
 	if (syms_ss)
 		ret = dso__load_sym(dso, map, syms_ss, runtime_ss, filter, kmod);

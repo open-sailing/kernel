@@ -17,6 +17,8 @@
 #include <linux/mm.h>
 #include <linux/of_pci.h>
 #include <linux/of_platform.h>
+#include <linux/of_irq.h>
+#include <linux/pcieport_if.h>
 #include <linux/slab.h>
 
 #include <asm/pci-bridge.h>
@@ -49,6 +51,44 @@ int pcibios_add_device(struct pci_dev *dev)
 }
 
 /*
+ * Check device tree if the service interrupts are there
+ */
+int pcibios_check_service_irqs(struct pci_dev *dev, int *irqs, int mask)
+{
+	int ret, count = 0;
+	struct device_node *np = dev->bus->dev.of_node;
+
+	if (!np)
+		return 0;
+
+	if (!IS_ENABLED(CONFIG_OF_IRQ))
+		return 0;
+
+	/* If root port doesn't support MSI/MSI-X/INTx in RC mode,
+	 * request irq for aer
+	 */
+	if (mask & PCIE_PORT_SERVICE_AER) {
+		ret = of_irq_get_byname(np, "aer");
+		if (ret > 0) {
+			irqs[PCIE_PORT_SERVICE_AER_SHIFT] = ret;
+			count++;
+		}
+	}
+
+	if (mask & PCIE_PORT_SERVICE_PME) {
+		ret = of_irq_get_byname(np, "pme");
+		if (ret > 0) {
+			irqs[PCIE_PORT_SERVICE_PME_SHIFT] = ret;
+			count++;
+		}
+	}
+
+	/* TODO: add more service interrupts if there it is in the device tree*/
+
+	return count;
+}
+
+/*
  * raw_pci_read/write - Platform-specific PCI config space access.
  */
 int raw_pci_read(unsigned int domain, unsigned int bus,
@@ -62,6 +102,16 @@ int raw_pci_write(unsigned int domain, unsigned int bus,
 {
 	return -ENXIO;
 }
+
+#ifdef CONFIG_NUMA
+
+int pcibus_to_node(struct pci_bus *bus)
+{
+	return dev_to_node(&bus->dev);
+}
+EXPORT_SYMBOL(pcibus_to_node);
+
+#endif
 
 #ifdef CONFIG_ACPI
 /* Root bridge scanning */

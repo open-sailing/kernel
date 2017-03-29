@@ -39,6 +39,7 @@
 #include <linux/slab.h>
 #include <asm/uaccess.h>
 #include <linux/fiemap.h>
+#include <linux/backing-dev.h>
 #include "ext4_jbd2.h"
 #include "ext4_extents.h"
 #include "xattr.h"
@@ -4671,6 +4672,7 @@ static int ext4_alloc_file_blocks(struct file *file, ext4_lblk_t offset,
 	int ret = 0;
 	int ret2 = 0;
 	int retries = 0;
+	int depth = 0;
 	struct ext4_map_blocks map;
 	unsigned int credits;
 	loff_t epos;
@@ -4689,9 +4691,24 @@ static int ext4_alloc_file_blocks(struct file *file, ext4_lblk_t offset,
 	 * credits to insert 1 extent into extent tree
 	 */
 	credits = ext4_chunk_trans_blocks(inode, len);
+	/*
+	 * We can only call ext_depth() on extent based inodes
+	 */
+	if (ext4_test_inode_flag(inode, EXT4_INODE_EXTENTS))
+		depth = ext_depth(inode);
+	else
+		depth = -1;
 
 retry:
 	while (ret >= 0 && len) {
+		/*
+		 * Recalculate credits when extent tree depth changes.
+		 */
+		if (depth >= 0 && depth != ext_depth(inode)) {
+			credits = ext4_chunk_trans_blocks(inode, len);
+			depth = ext_depth(inode);
+		}
+
 		handle = ext4_journal_start(inode, EXT4_HT_MAP_BLOCKS,
 					    credits);
 		if (IS_ERR(handle)) {

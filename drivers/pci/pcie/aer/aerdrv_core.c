@@ -574,7 +574,7 @@ void aer_recover_queue(int domain, unsigned int bus, unsigned int devfn,
 
 	spin_lock_irqsave(&aer_recover_ring_lock, flags);
 	if (kfifo_put(&aer_recover_ring, entry))
-		schedule_work(&aer_recover_work);
+		queue_work(aer_wq, &aer_recover_work);
 	else
 		pr_err("AER recover: Buffer overflow when recovering AER for %04x:%02x:%02x:%x\n",
 		       domain, bus, PCI_SLOT(devfn), PCI_FUNC(devfn));

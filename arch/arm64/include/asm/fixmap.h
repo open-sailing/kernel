@@ -18,6 +18,7 @@
 #ifndef __ASSEMBLY__
 #include <linux/kernel.h>
 #include <asm/page.h>
+#include <asm/pgtable-prot.h>
 
 /*
  * Here we define all the compile-time 'special' virtual

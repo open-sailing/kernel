@@ -74,6 +74,7 @@
 #include <trace/events/libata.h>
 
 #include "libata.h"
+#include "ahci.h"
 #include "libata-transport.h"
 
 /* debounce timing parameters in msecs { interval, duration, timeout } */
@@ -3802,6 +3803,12 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
 
 	if ((rc = sata_scr_write_flush(link, SCR_CONTROL, scontrol)))
 		goto out;
+
+	if (!memcmp("ahci_p660", link->ap->dev->driver->name, 9)) {
+		struct ahci_host_priv *hpriv = link->ap->host->private_data;
+		if (hpriv && hpriv->restart_port_phy)
+			hpriv->restart_port_phy(link->ap);
+	}
 
 	/* Couldn't find anything in SATA I/II specs, but AHCI-1.1
 	 * 10.4.2 says at least 1 ms.

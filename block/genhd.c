@@ -8,6 +8,7 @@
 #include <linux/kdev_t.h>
 #include <linux/kernel.h>
 #include <linux/blkdev.h>
+#include <linux/backing-dev.h>
 #include <linux/init.h>
 #include <linux/spinlock.h>
 #include <linux/proc_fs.h>
@@ -570,6 +571,20 @@ exit:
 	disk_part_iter_exit(&piter);
 }
 
+void put_disk_devt(struct disk_devt *disk_devt)
+{
+	if (disk_devt && atomic_dec_and_test(&disk_devt->count))
+		disk_devt->release(disk_devt);
+}
+EXPORT_SYMBOL(put_disk_devt);
+
+void get_disk_devt(struct disk_devt *disk_devt)
+{
+	if (disk_devt)
+		atomic_inc(&disk_devt->count);
+}
+EXPORT_SYMBOL(get_disk_devt);
+
 /**
  * add_disk - add partitioning information to kernel list
  * @disk: per-device partitioning information
@@ -608,6 +623,13 @@ void add_disk(struct gendisk *disk)
 	disk->first_minor = MINOR(devt);
 
 	disk_alloc_events(disk);
+
+	/*
+	 * Take a reference on the devt and assign it to queue since it
+	 * must not be reallocated while the bdi is registered
+	 */
+	disk->queue->disk_devt = disk->disk_devt;
+	get_disk_devt(disk->disk_devt);
 
 	/* Register BDI before referencing it from bdev */
 	bdi = &disk->queue->backing_dev_info;

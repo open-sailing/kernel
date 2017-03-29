@@ -280,7 +280,7 @@ if ($arch eq "x86_64") {
 } elsif ($arch eq "arm64") {
     $alignment = 3;
     $section_type = '%progbits';
-    $mcount_regex = "^\\s*([0-9a-fA-F]+):\\s*R_AARCH64_CALL26\\s+_mcount\$";
+    $mcount_regex = "^\\s*([0-9a-fA-F]+):\\s*R_AARCH64_CALL26\\s+(_mcount|__fentry__)\$";
     $type = ".quad";
 } elsif ($arch eq "ia64") {
     $mcount_regex = "^\\s*([0-9a-fA-F]+):.*\\s_mcount\$";

@@ -130,6 +130,9 @@ static inline void dma_free_attrs(struct device *dev, size_t size,
 {
 	struct dma_map_ops *ops = get_dma_ops(dev);
 
+	if (!vaddr)
+		return;
+
 	if (dma_release_from_coherent(dev, get_order(size), vaddr))
 		return;
 

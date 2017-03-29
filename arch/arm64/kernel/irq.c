@@ -78,10 +78,13 @@ static bool migrate_one_irq(struct irq_desc *desc)
 	}
 
 	c = irq_data_get_irq_chip(d);
-	if (!c->irq_set_affinity)
+	if (!c->irq_set_affinity) {
 		pr_debug("IRQ%u: unable to set affinity\n", d->irq);
-	else if (c->irq_set_affinity(d, affinity, false) == IRQ_SET_MASK_OK && ret)
-		cpumask_copy(d->affinity, affinity);
+	} else {
+		int r = c->irq_set_affinity(d, affinity, false);
+		if ((r == IRQ_SET_MASK_OK || r == IRQ_SET_MASK_OK_DONE) && ret)
+			cpumask_copy(d->affinity, affinity);
+	}
 
 	return ret;
 }

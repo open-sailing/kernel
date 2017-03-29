@@ -8,6 +8,10 @@ CFLAGS_REMOVE_common.o = -pg
 CFLAGS_REMOVE_perf_event.o = -pg
 endif
 
+# If these files are instrumented, boot hangs during the first second.
+KCOV_INSTRUMENT_common.o := n
+KCOV_INSTRUMENT_perf_event.o := n
+
 # Make sure load_percpu_segment has no stackprotector
 nostackp := $(call cc-option, -fno-stack-protector)
 CFLAGS_common.o		:= $(nostackp)
@@ -29,6 +33,8 @@ obj-$(CONFIG_CPU_SUP_CYRIX_32)		+= cyrix.o
 obj-$(CONFIG_CPU_SUP_CENTAUR)		+= centaur.o
 obj-$(CONFIG_CPU_SUP_TRANSMETA_32)	+= transmeta.o
 obj-$(CONFIG_CPU_SUP_UMC_32)		+= umc.o
+
+obj-$(CONFIG_INTEL_RDT_A)	+= intel_rdt.o intel_rdt_rdtgroup.o  intel_rdt_schemata.o
 
 obj-$(CONFIG_PERF_EVENTS)		+= perf_event.o
 

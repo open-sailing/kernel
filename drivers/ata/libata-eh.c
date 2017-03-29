@@ -816,7 +816,8 @@ void ata_scsi_port_error_handler(struct Scsi_Host *host, struct ata_port *ap)
 
 	if (ap->pflags & ATA_PFLAG_LOADING)
 		ap->pflags &= ~ATA_PFLAG_LOADING;
-	else if (ap->pflags & ATA_PFLAG_SCSI_HOTPLUG)
+	else if ((ap->pflags & ATA_PFLAG_SCSI_HOTPLUG) &&
+		 !(ap->flags & ATA_FLAG_SAS_HOST))
 		schedule_delayed_work(&ap->hotplug_task, 0);
 
 	if (ap->pflags & ATA_PFLAG_RECOVERED)
@@ -2980,6 +2981,13 @@ int ata_eh_reset(struct ata_link *link, int classify,
 		goto out;
 	}
 
+	if (rc == -ENODEV) {
+		ata_link_warn(failed_link,
+			"reset failed (errno=%d), device is offline\n", rc);
+		if (ata_is_host_link(link))
+			ata_eh_thaw_port(ap);
+		goto out;
+	}
 	now = jiffies;
 	if (time_before(now, deadline)) {
 		unsigned long delta = deadline - now;

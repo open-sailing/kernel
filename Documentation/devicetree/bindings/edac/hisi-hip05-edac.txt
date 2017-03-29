@@ -1,0 +1,256 @@
+Hisi hip05 SoC EDAC node
+
+EDAC node is defined to describe on-chip error detection and correction.
+The follow error types are supported:
+
+  memory controller	- Memory controller
+  cache (L1/L2)	- Processor L1/L2 cache
+
+The following section describes the EDAC DT node binding.
+
+Required properties:
+
+ compatible		: Shall be "hisi,hip05-edac-cache".
+  - poll-delay-ms	: ms of delay to poll cache ECC
+
+Example:
+
+edaccache {
+	compatible = "hisi,hip05-edac-cache";
+	poll-delay-ms = <1000>;
+}
+
+
+Hisi DDR3/4 DRAM Controller EDAC node
+
+EDAC node is defined to describe on-chip error detection and correction of
+Hisi DDR3/4 DRAM Controller.
+
+The follow error types are supported:
+
+  DDR3/4 DRAM Controller	- DRAM Controller
+
+The following section describes the EDAC DT node binding.
+
+Required properties:
+
+- compatible: Should contain "hisilicon,ddrc-edac".
+- reg: Physical base address of the ddrc driver and
+length of memory mapped region.
+
+Optional properties:
+- interrupt-parent: the interrupt parent of this device.
+- interrupts: should contain 1 DMC event irq and 1 RASC irq event
+Example:
+	edacmc@60340000 {
+	compatible = "hisilicon,ddrc-edac";
+	reg = <0x0 0x60340000 0x0 0x10000>;
+	interrupts =	<0 296 4>,
+			<0 297 4>;
+	};
+
+
+Hisi HCCS Home Agent EDAC node
+
+EDAC node is defined to describe on-chip error detection and correction of
+HCCS Home Agent EDAC.
+
+The follow error types are supported:
+
+  HCCS Home Agent	- Home Agent of ddrc and Ring Bus
+
+The following section describes the EDAC DT node binding.
+
+Required properties:
+
+- compatible: Should contain "hisilicon,hha-edac" for hip05
+and Should contain "hisilicon,hi1382-hha-edac" for 1382.
+- reg: Physical base address of the hha driver and
+length of memory mapped region.
+- djtag: phandle, specifies a reference to a node
+representing a djtag device.
+
+Optional properties:
+- interrupt-parent: the interrupt parent of this device.
+- interrupts: should contain 2 hha irq event
+Example:
+	edac_hha_a {
+		compatible = "hisilicon,hha-edac";
+		reg = <0x0 0x40010000 0x0 0x10000>;
+		interrupt-parent = <&mbigen_pa>;
+		interrupts =	<147 4>,
+				<148 4>;
+		djtag = <&djtag0>;
+	};
+
+
+Hisi Last Level Cache EDAC node
+
+EDAC node is defined to describe on-chip error detection and correction of
+Last Level Cache.
+
+The follow error types are supported:
+
+  cache (L3)	- Processor L3 cache
+
+The following section describes the EDAC DT node binding.
+
+Required properties:
+
+- compatible: Should contain "hisilicon,llc-edac" for hip05
+and Should contain "hisilicon,hi1382-llc-edac" for 1382.
+- reg: Physical base address of the llc driver and
+length of memory mapped region.
+- djtag: phandle, specifies a reference to a node
+representing a djtag device.
+
+Optional properties:
+- interrupt-parent: the interrupt parent of this device.
+- interrupts: should contain 4 llc irq event
+Example:
+	edac_llc_a {
+		compatible = "hisilicon,llc-edac";
+		reg = <0x0 0x40010000 0x0 0x10000>;
+		interrupt-parent = <&mbigen_pa>;
+		interrupts =	<141 4>,
+				<142 4>,
+				<143 4>,
+				<144 4>;
+		djtag = <&djtag0>;
+	};
+
+
+Hisi Protocol Adapter EDAC node
+
+EDAC node is defined to describe on-chip error detection and correction of
+Protocol Adapter.
+
+The follow error types are supported:
+
+  Protocol Adapter	- Adapter Between Hydra and Skyros
+
+The following section describes the EDAC DT node binding.
+
+Required properties:
+
+- compatible: Should contain "hisilicon,pa-edac".
+- reg: Physical base address of the pa driver and
+length of memory mapped region.
+- djtag: phandle, specifies a reference to a node
+representing a djtag device.
+
+Optional properties:
+- interrupt-parent: the interrupt parent of this device.
+- interrupts: should contain pa irq event
+Example:
+	edac_pa_nimbus1 {
+		compatible = "hisilicon,pa-edac";
+		reg = <0x0 0xD0000000 0x0 0x10000>;
+		interrupt-parent = <&mbigen_p0_alg>;
+		interrupts =	<0x40b1a 15 14 6>,
+				<0x40b1a 15 15 6>,
+				<0x40b1a 15 16 6>,
+				<0x40b1a 15 17 6>,
+				<0x40b1a 15 18 6>,
+				<0x40b1a 15 19 6>,
+				<0x40b1a 15 20 6>,
+				<0x40b1a 15 21 6>,
+				<0x40b1a 15 22 6>,
+				<0x40b1a 15 23 6>,
+				<0x40b1a 15 24 6>,
+				<0x40b1a 15 25 6>,
+				<0x40b1a 15 26 6>,
+				<0x40b1a 15 27 6>,
+				<0x40b1a 15 28 6>;
+		djtag = <&djtag2>;
+	};
+
+
+Hisi Skyros Link Layer Controller EDAC node
+
+EDAC node is defined to describe on-chip error detection and correction of
+Skyros Link Layer Controller.
+
+The follow error types are supported:
+
+  Skyros Link Layer Controller	- Toterm Skyros Protocol Adapter
+  Skyros Link Layer Controller	- Nimbus Skyros Protocol Adapter
+
+The following section describes the EDAC DT node binding.
+
+Required properties:
+
+- compatible: Should contain "hisilicon,sllcc-edac" for hip05 Toterm
+and Should contain "hisilicon,sllcn-edac" for hip05 Nimbus
+and Should contain "hisilicon,hi1382-sllcc-edac" for 1382 Toterm.
+- reg: Physical base address of the roce driver and
+length of memory mapped region.
+- djtag: phandle, specifies a reference to a node
+representing a djtag device.
+
+Optional properties:
+- interrupt-parent: the interrupt parent of this device.
+- interrupts: should contain all sllc irq event
+Example:
+	edac_sllc_a {
+		compatible = "hisilicon,sllcc-edac";
+		reg = <0x0 0x40000000 0x0 0x10000>;
+		interrupt-parent = <&mbigen_pa>;
+		interrupts =	<172 4>,
+				<173 4>,
+				<174 4>,
+				<175 4>;
+		djtag = <&djtag0>;
+	};
+	edac_sllc_n {
+		compatible = "hisilicon,sllcn-edac";
+		reg = <0x0 0xD0000000 0x0 0x10000>;
+		interrupt-parent = <&mbigen_p0_alg>;
+		interrupts =	<0x40b1a 15 14 6>,
+				<0x40b1a 15 15 6>,
+				<0x40b1a 15 16 6>,
+				<0x40b1a 15 17 6>,
+				<0x40b1a 15 18 6>,
+				<0x40b1a 15 19 6>,
+				<0x40b1a 15 20 6>,
+				<0x40b1a 15 21 6>,
+				<0x40b1a 15 22 6>,
+				<0x40b1a 15 23 6>,
+				<0x40b1a 15 24 6>,
+				<0x40b1a 15 25 6>,
+				<0x40b1a 15 26 6>,
+				<0x40b1a 15 27 6>,
+				<0x40b1a 15 28 6>;
+		djtag = <&djtag2>;
+	};
+
+
+Hisi System Memory Management Unit EDAC node
+
+EDAC node is defined to describe on-chip error detection and correction of
+Protocol Adapter.
+
+The follow error types are supported:
+
+  System Memory Management Unit	- System Address Translation
+
+The following section describes the EDAC DT node binding.
+
+Required properties:
+
+- compatible: Should contain "hisilicon,smmu-edac".
+- reg: Physical base address of the smmu driver and
+length of memory mapped region.
+
+Optional properties:
+- interrupt-parent: the interrupt parent of this device.
+- interrupts: should contain smmu irq event
+Example:
+	edac_smmu_dsa {
+		compatible = "hisilicon,hi-edac";
+		reg = <0x0 0xC0040000 0x0 0x20000>;
+		interrupt-parent = <&mbigen_dsa>;
+		interrupts =	<0x40b20 3 78 6>,
+				<0x40b20 3 79 6>,
+				<0x40b20 3 80 6>;
+	};

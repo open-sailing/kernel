@@ -28,7 +28,9 @@
 #include <linux/io.h>
 #include <linux/slab.h>
 #include <linux/stop_machine.h>
+#include <linux/bootmem.h>
 
+#include <asm/barrier.h>
 #include <asm/cputype.h>
 #include <asm/fixmap.h>
 #include <asm/sections.h>
@@ -46,7 +48,7 @@ u64 idmap_t0sz = TCR_T0SZ(VA_BITS);
  * Empty_zero_page is a special page that is used for zero-initialized data
  * and COW.
  */
-struct page *empty_zero_page;
+unsigned long empty_zero_page[PAGE_SIZE / sizeof(unsigned long)] __page_aligned_bss;
 EXPORT_SYMBOL(empty_zero_page);
 
 pgprot_t phys_mem_access_prot(struct file *file, unsigned long pfn,
@@ -60,11 +62,14 @@ pgprot_t phys_mem_access_prot(struct file *file, unsigned long pfn,
 }
 EXPORT_SYMBOL(phys_mem_access_prot);
 
-static void __init *early_alloc(unsigned long sz)
+static void __init *early_pgtable_alloc(void)
 {
-	void *ptr = __va(memblock_alloc(sz, sz));
+	void *ptr = __va(memblock_alloc(PAGE_SIZE, PAGE_SIZE));
 	BUG_ON(!ptr);
-	memset(ptr, 0, sz);
+	memset(ptr, 0, PAGE_SIZE);
+
+	/* Ensure the zeroed page is visible to the page table walker */
+	dsb(ishst);
 	return ptr;
 }
 
@@ -89,12 +94,12 @@ static void split_pmd(pmd_t *pmd, pte_t *pte)
 static void alloc_init_pte(pmd_t *pmd, unsigned long addr,
 				  unsigned long end, unsigned long pfn,
 				  pgprot_t prot,
-				  void *(*alloc)(unsigned long size))
+				  void *(*pgtable_alloc)(void))
 {
 	pte_t *pte;
 
 	if (pmd_none(*pmd) || pmd_sect(*pmd)) {
-		pte = alloc(PTRS_PER_PTE * sizeof(pte_t));
+		pte = pgtable_alloc();
 		if (pmd_sect(*pmd))
 			split_pmd(pmd, pte);
 		__pmd_populate(pmd, __pa(pte), PMD_TYPE_TABLE);
@@ -124,7 +129,7 @@ void split_pud(pud_t *old_pud, pmd_t *pmd)
 static void alloc_init_pmd(struct mm_struct *mm, pud_t *pud,
 				  unsigned long addr, unsigned long end,
 				  phys_addr_t phys, pgprot_t prot,
-				  void *(*alloc)(unsigned long size))
+				  void *(*pgtable_alloc)(void))
 {
 	pmd_t *pmd;
 	unsigned long next;
@@ -133,7 +138,7 @@ static void alloc_init_pmd(struct mm_struct *mm, pud_t *pud,
 	 * Check for initial section mappings in the pgd/pud and remove them.
 	 */
 	if (pud_none(*pud) || pud_sect(*pud)) {
-		pmd = alloc(PTRS_PER_PMD * sizeof(pmd_t));
+		pmd = pgtable_alloc();
 		if (pud_sect(*pud)) {
 			/*
 			 * need to have the 1G of mappings continue to be
@@ -168,7 +173,7 @@ static void alloc_init_pmd(struct mm_struct *mm, pud_t *pud,
 			}
 		} else {
 			alloc_init_pte(pmd, addr, next, __phys_to_pfn(phys),
-				       prot, alloc);
+				       prot, pgtable_alloc);
 		}
 		phys += next - addr;
 	} while (pmd++, addr = next, addr != end);
@@ -189,13 +194,13 @@ static inline bool use_1G_block(unsigned long addr, unsigned long next,
 static void alloc_init_pud(struct mm_struct *mm, pgd_t *pgd,
 				  unsigned long addr, unsigned long end,
 				  phys_addr_t phys, pgprot_t prot,
-				  void *(*alloc)(unsigned long size))
+				  void *(*pgtable_alloc)(void))
 {
 	pud_t *pud;
 	unsigned long next;
 
 	if (pgd_none(*pgd)) {
-		pud = alloc(PTRS_PER_PUD * sizeof(pud_t));
+		pud = pgtable_alloc();
 		pgd_populate(mm, pgd, pud);
 	}
 	BUG_ON(pgd_bad(*pgd));
@@ -228,7 +233,8 @@ static void alloc_init_pud(struct mm_struct *mm, pgd_t *pgd,
 				}
 			}
 		} else {
-			alloc_init_pmd(mm, pud, addr, next, phys, prot, alloc);
+			alloc_init_pmd(mm, pud, addr, next, phys, prot,
+				       pgtable_alloc);
 		}
 		phys += next - addr;
 	} while (pud++, addr = next, addr != end);
@@ -241,7 +247,7 @@ static void alloc_init_pud(struct mm_struct *mm, pgd_t *pgd,
 static void  __create_mapping(struct mm_struct *mm, pgd_t *pgd,
 				    phys_addr_t phys, unsigned long virt,
 				    phys_addr_t size, pgprot_t prot,
-				    void *(*alloc)(unsigned long size))
+				    void *(*pgtable_alloc)(void))
 {
 	unsigned long addr, length, end, next;
 
@@ -251,18 +257,18 @@ static void  __create_mapping(struct mm_struct *mm, pgd_t *pgd,
 	end = addr + length;
 	do {
 		next = pgd_addr_end(addr, end);
-		alloc_init_pud(mm, pgd, addr, next, phys, prot, alloc);
+		alloc_init_pud(mm, pgd, addr, next, phys, prot, pgtable_alloc);
 		phys += next - addr;
 	} while (pgd++, addr = next, addr != end);
 }
 
-static void *late_alloc(unsigned long size)
+static void *late_pgtable_alloc(void)
 {
-	void *ptr;
-
-	BUG_ON(size > PAGE_SIZE);
-	ptr = (void *)__get_free_page(PGALLOC_GFP);
+	void *ptr = (void *)__get_free_page(PGALLOC_GFP);
 	BUG_ON(!ptr);
+
+	/* Ensure the zeroed page is visible to the page table walker */
+	dsb(ishst);
 	return ptr;
 }
 
@@ -275,7 +281,7 @@ static void __ref create_mapping(phys_addr_t phys, unsigned long virt,
 		return;
 	}
 	__create_mapping(&init_mm, pgd_offset_k(virt & PAGE_MASK), phys, virt,
-			 size, prot, early_alloc);
+			 size, prot, early_pgtable_alloc);
 }
 
 void __init create_pgd_mapping(struct mm_struct *mm, phys_addr_t phys,
@@ -283,7 +289,7 @@ void __init create_pgd_mapping(struct mm_struct *mm, phys_addr_t phys,
 			       pgprot_t prot)
 {
 	__create_mapping(mm, pgd_offset(mm, virt), phys, virt, size, prot,
-				late_alloc);
+				late_pgtable_alloc);
 }
 
 static void create_mapping_late(phys_addr_t phys, unsigned long virt,
@@ -296,7 +302,7 @@ static void create_mapping_late(phys_addr_t phys, unsigned long virt,
 	}
 
 	return __create_mapping(&init_mm, pgd_offset_k(virt & PAGE_MASK),
-				phys, virt, size, prot, late_alloc);
+				phys, virt, size, prot, late_pgtable_alloc);
 }
 
 #ifdef CONFIG_DEBUG_RODATA
@@ -420,7 +426,7 @@ void mark_rodata_ro(void)
 {
 	create_mapping_late(__pa(_stext), (unsigned long)_stext,
 				(unsigned long)_etext - (unsigned long)_stext,
-				PAGE_KERNEL_EXEC | PTE_RDONLY);
+				PAGE_KERNEL_ROX);
 
 }
 #endif
@@ -438,17 +444,8 @@ void fixup_init(void)
  */
 void __init paging_init(void)
 {
-	void *zero_page;
-
 	map_mem();
 	fixup_executable();
-
-	/* allocate the zero page. */
-	zero_page = early_alloc(PAGE_SIZE);
-
-	bootmem_init();
-
-	empty_zero_page = virt_to_page(zero_page);
 
 	/* Ensure the zero page is visible to the page table walker */
 	dsb(ishst);
@@ -462,10 +459,46 @@ void __init paging_init(void)
 	cpu_set_default_tcr_t0sz();
 }
 
+#ifdef CONFIG_MEMORY_HOTPLUG
+/*
+ * The variables which mark memory end boundary should be updated after memory
+ * hot-added.
+ */
+static void update_end_of_memory_vars(u64 start, u64 size)
+{
+	unsigned long end_pfn = PFN_UP(start + size);
+
+	if (end_pfn > max_pfn) {
+		max_pfn = max_low_pfn = end_pfn;
+		high_memory = __va((end_pfn << PAGE_SHIFT) - 1) + 1;
+	}
+}
+
+int arch_add_memory(int nid, u64 start, u64 size)
+{
+	int ret;
+	struct pglist_data *pgdata = NODE_DATA(nid);
+	struct zone *zone = pgdata->node_zones +
+		zone_for_memory(nid, start, size, ZONE_NORMAL);
+	unsigned long start_pfn = start >> PAGE_SHIFT;
+	unsigned long nr_pages = size >> PAGE_SHIFT;
+
+	create_mapping_late(start, __phys_to_virt(start), size, PAGE_KERNEL);
+
+	ret = __add_pages(nid, zone, start_pfn, nr_pages);
+	if (!ret)
+		ret = memblock_add_node(start, size, nid);
+
+	update_end_of_memory_vars(start, size);
+
+	return ret;
+}
+#endif /* CONFIG_MEMORY_HOTPLUG */
+
 /*
  * Enable the identity mapping to allow the MMU disabling.
  */
-void setup_mm_for_reboot(void)
+void cpu_install_idmap(void)
 {
 	cpu_set_reserved_ttbr0();
 	flush_tlb_all();

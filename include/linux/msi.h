@@ -108,7 +108,7 @@ struct msi_controller {
 	struct device *dev;
 	struct device_node *of_node;
 	struct list_head list;
-#ifdef CONFIG_GENERIC_MSI_IRQ_DOMAIN
+#if defined(CONFIG_GENERIC_MSI_IRQ_DOMAIN) || defined(CONFIG_MBI)
 	struct irq_domain *domain;
 #endif
 

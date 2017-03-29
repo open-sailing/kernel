@@ -419,7 +419,6 @@ static void ext3_put_super (struct super_block * sb)
 	int i, err;
 
 	dquot_disable(sb, -1, DQUOT_USAGE_ENABLED | DQUOT_LIMITS_ENABLED);
-	ext3_xattr_put_super(sb);
 	err = journal_destroy(sbi->s_journal);
 	sbi->s_journal = NULL;
 	if (err < 0)
@@ -463,6 +462,10 @@ static void ext3_put_super (struct super_block * sb)
 		sync_blockdev(sbi->journal_bdev);
 		invalidate_bdev(sbi->journal_bdev);
 		ext3_blkdev_remove(sbi);
+	}
+	if (sbi->s_mb_cache) {
+		ext3_xattr_destroy_cache(sbi->s_mb_cache);
+		sbi->s_mb_cache = NULL;
 	}
 	sb->s_fs_info = NULL;
 	kfree(sbi->s_blockgroup_lock);
@@ -517,6 +520,7 @@ static void ext3_destroy_inode(struct inode *inode)
 				EXT3_I(inode), sizeof(struct ext3_inode_info),
 				false);
 		dump_stack();
+		ext3_orphan_del(NULL, inode);
 	}
 	call_rcu(&inode->i_rcu, ext3_i_callback);
 }
@@ -2086,6 +2090,14 @@ static int ext3_fill_super (struct super_block *sb, void *data, int silent)
 		break;
 	}
 
+#ifdef CONFIG_EXT3_FS_XATTR
+	sbi->s_mb_cache = ext3_xattr_create_cache();
+	if (!sbi->s_mb_cache) {
+		ext3_msg(sb, KERN_ERR, "Failed to create an mb_cache");
+		goto failed_mount3;
+	}
+#endif
+
 	/*
 	 * The journal_load will have done any necessary log recovery,
 	 * so we can safely mount the rest of the filesystem now.
@@ -2134,6 +2146,8 @@ cantfind_ext3:
 	goto failed_mount;
 
 failed_mount3:
+	if (sbi->s_mb_cache)
+		ext3_xattr_destroy_cache(sbi->s_mb_cache);
 	percpu_counter_destroy(&sbi->s_freeblocks_counter);
 	percpu_counter_destroy(&sbi->s_freeinodes_counter);
 	percpu_counter_destroy(&sbi->s_dirs_counter);
@@ -3134,20 +3148,17 @@ MODULE_ALIAS_FS("ext3");
 
 static int __init init_ext3_fs(void)
 {
-	int err = init_ext3_xattr();
-	if (err)
-		return err;
+	int err;
+
 	err = init_inodecache();
 	if (err)
-		goto out1;
+		return err;
         err = register_filesystem(&ext3_fs_type);
 	if (err)
 		goto out;
 	return 0;
 out:
 	destroy_inodecache();
-out1:
-	exit_ext3_xattr();
 	return err;
 }
 
@@ -3155,7 +3166,6 @@ static void __exit exit_ext3_fs(void)
 {
 	unregister_filesystem(&ext3_fs_type);
 	destroy_inodecache();
-	exit_ext3_xattr();
 }
 
 MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");

@@ -399,7 +399,7 @@ static void check_modem_status(struct serial_state *info)
 		wake_up_interruptible(&port->delta_msr_wait);
 	}
 
-	if ((port->flags & ASYNC_CHECK_CD) && (dstatus & SER_DCD)) {
+	if (tty_port_check_carrier(port) && (dstatus & SER_DCD)) {
 #if (defined(SERIAL_DEBUG_OPEN) || defined(SERIAL_DEBUG_INTR))
 		printk("ttyS%d CD now %s...", info->line,
 		       (!(status & SER_DCD)) ? "on" : "off");
@@ -526,7 +526,7 @@ static int startup(struct tty_struct *tty, struct serial_state *info)
 
 	local_irq_save(flags);
 
-	if (port->flags & ASYNC_INITIALIZED) {
+	if (tty_port_initialized(port)) {
 		free_page(page);
 		goto errout;
 	}
@@ -587,7 +587,7 @@ static int startup(struct tty_struct *tty, struct serial_state *info)
 	 */
 	change_speed(tty, info, NULL);
 
-	port->flags |= ASYNC_INITIALIZED;
+	tty_port_set_initialized(port, 1);
 	local_irq_restore(flags);
 	return 0;
 
@@ -605,7 +605,7 @@ static void shutdown(struct tty_struct *tty, struct serial_state *info)
 	unsigned long	flags;
 	struct serial_state *state;
 
-	if (!(info->tport.flags & ASYNC_INITIALIZED))
+	if (!tty_port_initialized(&info->tport))
 		return;
 
 	state = info;
@@ -646,7 +646,7 @@ static void shutdown(struct tty_struct *tty, struct serial_state *info)
 
 	set_bit(TTY_IO_ERROR, &tty->flags);
 
-	info->tport.flags &= ~ASYNC_INITIALIZED;
+	tty_port_set_initialized(&info->tport, 0);
 	local_irq_restore(flags);
 }
 
@@ -728,17 +728,12 @@ static void change_speed(struct tty_struct *tty, struct serial_state *info,
 	info->IER &= ~UART_IER_MSI;
 	if (port->flags & ASYNC_HARDPPS_CD)
 		info->IER |= UART_IER_MSI;
-	if (cflag & CRTSCTS) {
-		port->flags |= ASYNC_CTS_FLOW;
+	tty_port_set_cts_flow(port, cflag & CRTSCTS);
+	if (cflag & CRTSCTS)
 		info->IER |= UART_IER_MSI;
-	} else
-		port->flags &= ~ASYNC_CTS_FLOW;
-	if (cflag & CLOCAL)
-		port->flags &= ~ASYNC_CHECK_CD;
-	else {
-		port->flags |= ASYNC_CHECK_CD;
+	tty_port_set_check_carrier(port, ~cflag & CLOCAL);
+	if (~cflag & CLOCAL)
 		info->IER |= UART_IER_MSI;
-	}
 	/* TBD:
 	 * Does clearing IER_MSI imply that we should disable the VBL interrupt ?
 	 */
@@ -1096,7 +1091,7 @@ static int set_serial_info(struct tty_struct *tty, struct serial_state *state,
 	port->low_latency = (port->flags & ASYNC_LOW_LATENCY) ? 1 : 0;
 
 check_and_exit:
-	if (port->flags & ASYNC_INITIALIZED) {
+	if (tty_port_initialized(port)) {
 		if (change_spd) {
 			if ((port->flags & ASYNC_SPD_MASK) == ASYNC_SPD_HI)
 				tty->alt_speed = 57600;
@@ -1408,7 +1403,7 @@ static void rs_close(struct tty_struct *tty, struct file * filp)
 	 * line status register.
 	 */
 	state->read_status_mask &= ~UART_LSR_DR;
-	if (port->flags & ASYNC_INITIALIZED) {
+	if (tty_port_initialized(port)) {
 	        /* disable receive interrupts */
 	        custom.intena = IF_RBF;
 		mb();
@@ -1508,7 +1503,7 @@ static void rs_hangup(struct tty_struct *tty)
 	rs_flush_buffer(tty);
 	shutdown(tty, info);
 	info->tport.count = 0;
-	info->tport.flags &= ~ASYNC_NORMAL_ACTIVE;
+	tty_port_set_active(&info->tport, 0);
 	info->tport.tty = NULL;
 	wake_up_interruptible(&info->tport.open_wait);
 }
@@ -1556,7 +1551,7 @@ static inline void line_info(struct seq_file *m, int line,
 
 	local_irq_save(flags);
 	status = ciab.pra;
-	control = (state->tport.flags & ASYNC_INITIALIZED) ? state->MCR : status;
+	control = tty_port_initialized(&state->tport) ? state->MCR : status;
 	local_irq_restore(flags);
 
 	stat_buf[0] = 0;

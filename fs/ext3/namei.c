@@ -2500,6 +2500,12 @@ static int ext3_rename (struct inode * old_dir, struct dentry *old_dentry,
 	}
 
 	if (new_inode) {
+		if (!new_inode->i_nlink) {
+			ext3_warning(new_inode->i_sb, "ext3_rename",
+				"path %pd (%lu): removing un-referenced inode",
+				new_dentry, new_inode->i_ino);
+			set_nlink(new_inode, 1);
+		}
 		drop_nlink(new_inode);
 		new_inode->i_ctime = CURRENT_TIME_SEC;
 	}

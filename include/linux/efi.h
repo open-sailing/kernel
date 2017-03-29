@@ -589,6 +589,19 @@ void efi_native_runtime_setup(void);
 #define DEVICE_TREE_GUID \
     EFI_GUID(  0xb1b621d5, 0xf19c, 0x41a5, 0x83, 0x0b, 0xd9, 0x15, 0x2c, 0x69, 0xaa, 0xe0 )
 
+/*
+ * For interal ARM64 server use only.
+ * This is a hack solution to support both DTB and ACPI in firmware,
+ * because OS vendors such as RH/SUSE don't need a acpi=on for boot
+ * cmdline, and it will boot from DTB in defalut if firmware has both
+ * DTB and ACPI tables.
+ * So hack to introduce a GUID in both firmware and kernel which we use
+ * this GUID only to get DTB, then RH/SUSE will not get DTB as the
+ * GUID is not right.
+ */
+#define DEVICE_TREE_HW_HACK_GUID \
+    EFI_GUID(  0xc49794b5, 0x5dfa, 0x4070, 0x80, 0x62, 0xc8, 0x0, 0xbf, 0xde, 0x82, 0x2a  )
+
 typedef struct {
 	efi_guid_t guid;
 	u64 table;

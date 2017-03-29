@@ -426,6 +426,38 @@ static int ixgbe_set_pauseparam(struct net_device *netdev,
 	return 0;
 }
 
+static void ixgbe_set_relaxorder(struct net_device *netdev, u32 data)
+{
+	struct ixgbe_adapter *adapter = netdev_priv(netdev);
+	struct ixgbe_hw *hw = &adapter->hw;
+	u32 i = 0;
+	pr_info("set relax ordering mode : %s\n",data?"on":"off");
+	for (i = 0; i < hw->mac.max_tx_queues; i++) {
+		u32 regval;
+
+		regval = IXGBE_READ_REG(hw, IXGBE_DCA_TXCTRL_82599(i));
+		if (data)
+			regval |= IXGBE_DCA_TXCTRL_DESC_WRO_EN;
+		else
+			regval &= ~IXGBE_DCA_TXCTRL_DESC_WRO_EN;
+		IXGBE_WRITE_REG(hw, IXGBE_DCA_TXCTRL_82599(i), regval);
+	}
+
+	for (i = 0; i < hw->mac.max_rx_queues; i++) {
+		u32 regval;
+
+		regval = IXGBE_READ_REG(hw, IXGBE_DCA_RXCTRL(i));
+		if (data)
+			regval |= (IXGBE_DCA_RXCTRL_DATA_WRO_EN |
+					IXGBE_DCA_RXCTRL_HEAD_WRO_EN);
+		else
+			regval &= ~(IXGBE_DCA_RXCTRL_DATA_WRO_EN |
+					IXGBE_DCA_RXCTRL_HEAD_WRO_EN);
+		IXGBE_WRITE_REG(hw, IXGBE_DCA_RXCTRL(i), regval);
+	}
+}
+
+
 static u32 ixgbe_get_msglevel(struct net_device *netdev)
 {
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
@@ -3157,6 +3189,7 @@ static const struct ethtool_ops ixgbe_ethtool_ops = {
 	.get_ts_info		= ixgbe_get_ts_info,
 	.get_module_info	= ixgbe_get_module_info,
 	.get_module_eeprom	= ixgbe_get_module_eeprom,
+	.set_relaxorder		= ixgbe_set_relaxorder,
 };
 
 void ixgbe_set_ethtool_ops(struct net_device *netdev)

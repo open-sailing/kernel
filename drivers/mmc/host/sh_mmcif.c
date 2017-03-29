@@ -398,8 +398,8 @@ sh_mmcif_request_dma_one(struct sh_mmcif_host *host,
 
 	if (pdata)
 		slave_data = direction == DMA_MEM_TO_DEV ?
-			(void *)pdata->slave_id_tx :
-			(void *)pdata->slave_id_rx;
+			(void *)(uintptr_t)pdata->slave_id_tx :
+			(void *)(uintptr_t)pdata->slave_id_rx;
 
 	chan = dma_request_slave_channel_compat(mask, shdma_chan_filter,
 				slave_data, &host->pd->dev,
