@@ -711,8 +711,6 @@ static int cpu_pmu_request_irq(struct arm_pmu *cpu_pmu, irq_handler_t handler)
 	return 0;
 }
 
-static DEFINE_SPINLOCK(arm_pmu_resource_lock);
-
 static void arm_perf_associate_new_cpu(struct arm_pmu *lpmu, unsigned int cpu)
 {
 	struct platform_device *pdev = lpmu->plat_device;
@@ -720,7 +718,6 @@ static void arm_perf_associate_new_cpu(struct arm_pmu *lpmu, unsigned int cpu)
 	struct pmu_hw_events *events;
 	int num_res;
 
-	spin_lock(&arm_pmu_resource_lock);
 	for (num_res = 0; num_res < pdev->num_resources; num_res++) {
 		if (!pdev->resource[num_res].flags)
 			break;
@@ -732,7 +729,6 @@ static void arm_perf_associate_new_cpu(struct arm_pmu *lpmu, unsigned int cpu)
 	if (lpmu->irq_affinity)
 		lpmu->irq_affinity[num_res] = cpu;
 	events->percpu_pmu = lpmu;
-	spin_unlock(&arm_pmu_resource_lock);
 }
 
 /*
@@ -934,7 +930,6 @@ static int probe_plat_pmu(struct arm_pmu *pmu,
 	int ret = -ENODEV;
 	int cpu;
 	int aff_ctr = 0;
-	static int duplicate_pmus;
 	struct platform_device *pdev = pmu->plat_device;
 	int irq = platform_get_irq(pdev, 0);
 
@@ -964,25 +959,6 @@ static int probe_plat_pmu(struct arm_pmu *pmu,
 		if ((pmuid & info->mask) != info->cpuid)
 			continue;
 		ret = info->init(pmu);
-		/*
-		 * if this pmu declaration is unspecified and we have
-		 * previously found a PMU on this platform then append
-		 * a PMU number to the pmu name. This avoids changing
-		 * the names of PMUs that are specific to a class of CPUs.
-		 * The assumption is that if we match a specific PMU in the
-		 * provided pmu_probe_info then it's unique, and another PMU
-		 * in the system will match a different entry rather than
-		 * needing the _number to assure its unique.
-		 */
-		if ((!info->cpuid) && (duplicate_pmus)) {
-			pmu->name = kasprintf(GFP_KERNEL, "%s_%d",
-					    pmu->name, duplicate_pmus);
-			if (!pmu->name) {
-				kfree(pmu->irq_affinity);
-				ret = -ENOMEM;
-			}
-		}
-		duplicate_pmus++;
 		break;
 	}
 
@@ -1089,6 +1065,7 @@ int arm_pmu_device_probe(struct platform_device *pdev,
 			 const struct of_device_id *of_table,
 			 const struct pmu_probe_info *probe_table)
 {
+	static int duplicate_pmus;
 	const struct of_device_id *of_id;
 	const int (*init_fn)(struct arm_pmu *);
 	struct device_node *node = pdev->dev.of_node;
@@ -1135,6 +1112,25 @@ int arm_pmu_device_probe(struct platform_device *pdev,
 		goto out_free;
 	}
 
+	/*
+	 * if this pmu declaration is a generic pmu and we have
+	 * previously found a generic pmu on this platform
+	 * then append a PMU number to the pmu name. This avoids
+	 * changing the names of PMUs that are specific to a class
+	 * of CPUs. The assumption is that if we match a specific PMU
+	 * then it's unique, and another PMU in the system will match
+	 * a different entry rather than needing the _number to
+	 * assure its unique.
+	 */
+	if (!strcmp(pmu->name, ARMV8_PMUV3_DESCRIPTION)) {
+		if (duplicate_pmus) {
+			pmu->name = kasprintf(GFP_KERNEL, "%s_%d",
+					      pmu->name, duplicate_pmus);
+			if (!pmu->name)
+				goto out_free;
+		}
+		duplicate_pmus++;
+	}
 
 	ret = cpu_pmu_init(pmu);
 	if (ret)

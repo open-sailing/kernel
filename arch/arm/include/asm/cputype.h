@@ -94,6 +94,9 @@
 #define ARM_CPU_XSCALE_ARCH_V2		0x4000
 #define ARM_CPU_XSCALE_ARCH_V3		0x6000
 
+/* Qualcomm implemented cores */
+#define ARM_CPU_PART_SCORPION		0x510002d0
+
 extern unsigned int processor_id;
 
 #ifdef CONFIG_CPU_CP15
@@ -235,7 +238,9 @@ static inline unsigned int __attribute_const__ read_cpuid_mpidr(void)
 #define cpu_is_sa1100() (read_cpuid_part() == ARM_CPU_PART_SA1100)
 #define cpu_is_sa1110() (read_cpuid_part() == ARM_CPU_PART_SA1110)
 
-#define read_specific_cpuid(cpu_num) per_cpu_ptr(&cpu_data, cpu_num)->cpuid
+#define read_specific_cpuid(cpu_num) (is_smp() ? \
+				      per_cpu_ptr(&cpu_data, cpu_num)->cpuid \
+				      : read_cpuid_id())
 
 /*
  * Intel's XScale3 core supports some v6 features (supersections, L2)

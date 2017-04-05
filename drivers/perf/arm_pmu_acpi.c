@@ -37,7 +37,7 @@ struct pmu_types {
 static struct pmu_irq pmu_irqs[NR_CPUS];
 
 /*
- * Called from acpi_verify_and_map_madt()'s MADT parsing during boot.
+ * Called from acpi_map_gic_cpu_interface()'s MADT parsing during boot.
  * This routine saves off the GSI's and their trigger state for use when we are
  * ready to build the PMU platform device.
  */
@@ -77,7 +77,7 @@ static int __init arm_pmu_acpi_determine_cpu_types(struct list_head *pmus)
 	int unused_madt_entries = 0;
 
 	for_each_possible_cpu(i) {
-		struct cpuinfo_arm64 *cinfo = per_cpu_ptr(&cpu_data, i);
+		u32 reg_midr = read_specific_cpuid(i);
 		struct pmu_types *pmu;
 
 		/*
@@ -88,13 +88,13 @@ static int __init arm_pmu_acpi_determine_cpu_types(struct list_head *pmus)
 						    pmu_irqs[i].trigger,
 						    ACPI_ACTIVE_HIGH);
 		/* likely not online */
-		if (cinfo->reg_midr == 0) {
+		if (reg_midr == 0) {
 			unused_madt_entries++;
 			continue;
 		}
 
 		list_for_each_entry(pmu, pmus, list) {
-			if (pmu->cpu_type == cinfo->reg_midr) {
+			if (pmu->cpu_type == reg_midr) {
 				pmu->cpu_count++;
 				break;
 			}
@@ -108,7 +108,7 @@ static int __init arm_pmu_acpi_determine_cpu_types(struct list_head *pmus)
 				arm_pmu_acpi_handle_alloc_failure(pmus);
 				break;
 			}
-			pmu->cpu_type = cinfo->reg_midr;
+			pmu->cpu_type = reg_midr;
 			pmu->cpu_count++;
 			list_add_tail(&pmu->list, pmus);
 		}
@@ -144,9 +144,8 @@ static void __init arm_pmu_acpi_unregister_pmu_gsi(int cpu_id)
 	int i;
 
 	for_each_possible_cpu(i) {
-		struct cpuinfo_arm64 *cinfo = per_cpu_ptr(&cpu_data, i);
 
-		if (cinfo->reg_midr == cpu_id) {
+		if (read_specific_cpuid(i) == cpu_id) {
 			pmu_irqs[i].used = false;
 			if (pmu_irqs[i].irq > 0)
 				acpi_unregister_gsi(pmu_irqs[i].gsi);
@@ -205,14 +204,14 @@ static int __init arm_pmu_acpi_gsi_res(struct pmu_types *pmus,
 	/* lets group all the PMU's from similar CPU's together */
 	count = 0;
 	for_each_possible_cpu(i) {
-		struct cpuinfo_arm64 *cinfo = per_cpu_ptr(&cpu_data, i);
+		u32 reg_midr = read_specific_cpuid(i);
 
-		if (pmus->cpu_type == cinfo->reg_midr) {
-			if ((pmu_irqs[i].gsi == 0) && (cinfo->reg_midr != 0))
+		if (pmus->cpu_type == reg_midr) {
+			if ((pmu_irqs[i].gsi == 0) && (reg_midr != 0))
 				continue;
 
 			/* likely not online */
-			if (!cinfo->reg_midr)
+			if (!reg_midr)
 				continue;
 
 			arm_pmu_acpi_retrieve_irq(&res[count], i);
@@ -250,7 +249,7 @@ static int __init pmu_acpi_register(struct pmu_types *pmu)
 static int __init pmu_acpi_init(void)
 {
 	struct pmu_types *pmu, *safe_temp;
-	bool unused_madt_entries;
+	int unused_madt_entries;
 	LIST_HEAD(pmus);
 
 	if (acpi_disabled)
