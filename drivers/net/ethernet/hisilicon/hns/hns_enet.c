@@ -856,18 +856,13 @@ static void hns_nic_adpt_coalesce(struct hns_nic_ring_data *ring_data)
 	     handle->adapt_ring_idx == ring_data->queue_index) ||
 	    current_jiffies - handle->update_time > HZ) {
 		if (new_coal_param != handle->coal_param) {
-			spin_lock_bh(&handle->coal_set_lock);
-			if (is_coal_adapt(ring)) {
-				handle->dev->ops->set_coalesce_usecs(handle,
-							new_coal_param);
-				handle->dev->ops->set_coalesce_frames(handle,
-							new_coal_param);
-				handle->coal_param = new_coal_param;
-				handle->adapt_ring_idx = ring_data->queue_index;
-			}
-			spin_unlock_bh(&handle->coal_set_lock);
+			handle->dev->ops->set_coalesce_usecs(handle,
+						new_coal_param);
+			handle->dev->ops->set_coalesce_frames(handle,
+						new_coal_param);
+			handle->coal_param = new_coal_param;
+			handle->adapt_ring_idx = ring_data->queue_index;
 		}
-
 		handle->update_time = jiffies;
 	}
 }
@@ -958,9 +953,7 @@ static bool hns_nic_rx_fini_pro_v2(struct hns_nic_ring_data *ring_data)
 	num = readl_relaxed(ring->io_base + RCB_REG_FBDNUM);
 
 	if (num < 4) {
-		if (is_coal_adapt(ring))
-			hns_nic_adpt_coalesce(ring_data);
-
+		hns_nic_adpt_coalesce(ring_data);
 		return true;
 	} else {
 		return false;

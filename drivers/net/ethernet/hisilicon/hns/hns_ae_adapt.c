@@ -101,7 +101,6 @@ struct hnae_handle *hns_ae_get_handle(struct hnae_ae_dev *dev,
 	ae_handle->dev = dev;
 	ae_handle->q_num = qnum_per_vf;
 	ae_handle->coal_param = HNAE_LOWEST_LATENCY_COAL_PARAM;
-	spin_lock_init(&ae_handle->coal_set_lock);
 
 	/* find ring pair, and set vf id*/
 	for (ae_handle->vf_id = 0;
