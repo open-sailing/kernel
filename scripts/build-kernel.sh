@@ -16,25 +16,29 @@ build_kernel_usage()
 {
 cat << EOF
 Usage: ./sailling/build-kernel.sh [clean] --cross=xxx --output=xxx
-    default no compile module & firmware
-    --ko: select compile kernel module
-    --firm: select compile kernel firmware
 
     clean: clean the kernel binary files (include dtb)
     --cross: cross compile prefix (if the host is not arm architecture, it must be specified.)
-    --output: target binary output directory
+    --output: target binary output directory, default ./workspace
+    --module: select compile kernel module & firmware
+
+    caution:
+	the following options only for the target board ( D03 D05 .etc )
+
+    --allflush: just used to build kernel in target board, update startup disk and module(default sda1)
     --startup; automate set starting items in grub.cfg and copy Image to special disk(default sda1)
     --startup_disk: Generally can be set sda1 sdb1 or nvme0n1 (ES3000), default sda1
 
 Example:
-    ./scripts/build-kernel.sh --output=workspace
-    ./scripts/build-kernel.sh --startup --output=workspace
-    ./scripts/build-kernel.sh --startup --startup_disk=sdb1 --output=workspace
-    ./scripts/build-kernel.sh --startup --startup_disk=nvme0n1 --output=workspace
+    ./scripts/build-kernel.sh
+    ./scripts/build-kernel.sh --module
+    ./scripts/build-kernel.sh --output=output_dir
+    ./scripts/build-kernel.sh --cross=aarch64-linux-gnu-
+    ./scripts/build-kernel.sh --module --cross=aarch64-linux-gnu-
 
-    ./scripts/build-kernel.sh --ko --firm --output=workspace
-    ./scripts/build-kernel.sh --output=workspace --cross=aarch64-linux-gnu-
-    ./scripts/build-kernel.sh --ko --firm --output=workspace --cross=aarch64-linux-gnu-
+    ./scripts/build-kernel.sh --allflush
+    ./scripts/build-kernel.sh --startup --startup_disk=sdb1
+    ./scripts/build-kernel.sh --startup --startup_disk=nvme0n1
     ./scripts/build-kernel.sh clean
 EOF
 }
@@ -53,6 +57,9 @@ build_kernel()
     make O=$kernel_dir CROSS_COMPILE=${CROSS_COMPILE} -j${CORE_NUM} ${kernel_bin##*/}
 
     if [ x"$MODULE" = x"yes" ]; then
+        if [ x"$ALLFLUSH" = x"yes" ]; then
+		modules_dir=/
+	fi
 	echo "Compile module ......"
 	#Compile kernel module
 	make O=$kernel_dir CROSS_COMPILE=${CROSS_COMPILE} modules -j${CORE_NUM}
@@ -86,22 +93,14 @@ auto_install()
     fi
 
     mount /dev/$STARTUP_DISK $install_path
-    timestamp=`date "+%H%M%S"`
-    capacity=`du -h --max-depth=0 | awk '{print $1}' | tr -cd "[0-9]"`
-    #this part need optimize
-    if [ $capacity -ge 170 ]; then
-	echo "Not enough space left...... "
-	exit 1
-    fi
 
-    cp $kernel_bin $install_path/Image-$timestamp
-    Image=Image-$timestamp
-    linux_arg="/$Image root=$root_dev_info rootwait rw pcie_aspm=off pci=pcie_bus_perf"
+    cp $kernel_bin $install_path/Image-debug
+    linux_arg="/Image-debug root=$root_dev_info rootwait rw pcie_aspm=off pci=pcie_bus_perf"
     pushd $install_path >/dev/null
 cat >> grub.cfg << EOF
 
 # Debug Booting from SATA/SAS with $distro_name rootfs (Console)
-menuentry "${platform} $distro_name (Console) $timestamp" --id ${platform}_${distro_name}_console_$timestamp {
+menuentry "${platform} $distro_name (Console) Debug" --id ${platform}_${distro_name}_console_debug {
     set root=(hd0,gpt1)
     search --no-floppy --fs-uuid --set=root $boot_dev_uuid
     linux $linux_arg
@@ -110,10 +109,8 @@ menuentry "${platform} $distro_name (Console) $timestamp" --id ${platform}_${dis
 EOF
     #get the startup linenum
     startup_line=`sed -n '/^set default=/='  $install_path/grub.cfg`
-    default_menuentry="${platform}"_"${distro_name}"_console_"$timestamp"
+    default_menuentry="${platform}"_"${distro_name}"_console_debug
     sed -i ''$startup_line's/.*/set default='$default_menuentry'/' $install_path/grub.cfg
-
-    lsof $install_path
     sync
     sleep 1
     popd
@@ -158,11 +155,11 @@ do
 
     case $ac_option in
 	    clean) CLEAN=yes ;;
-	    --ko) MODULE=yes;;
-	    --firm) FIRMWARE=yes;;
+	    --module) MODULE=yes;;
 	    --cross) CROSS_COMPILE=$ac_optarg ;;
             --output) OUTPUT_DIR=$ac_optarg ;;
 	    --startup) STARTUP=yes;;
+	    --allflush) MODULE=yes; STARTUP=yes; ALLFLUSH=yes;;
 	    --startup_disk) STARTUP_DISK=$ac_optarg ;;
         *) build_kernel_usage ; exit 1 ;;
     esac
@@ -209,7 +206,7 @@ if ! build_project; then
 fi
 
 if [ x"$STARTUP" = x"yes" ]; then
-    echo "Startup deploye ......"
+    echo "Startup deploy ...... \n"
     if ! auto_install; then
         echo -e "\033[31mError! Auto install startup disk failed!\033[0m" ; exit 1
     fi
