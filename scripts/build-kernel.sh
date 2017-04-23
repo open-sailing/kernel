@@ -6,7 +6,7 @@
 export ARCH=arm64
 platform=${platform:-d05}
 CROSS_COMPILE=${CROSS_COMPILE}
-OUTPUT_DIR=${OUTPUT_DIR:-build}
+OUTPUT_DIR=${OUTPUT_DIR:-workspace}
 STARTUP_DISK=${STARTUP_DISK:-sda1}
 CORE_NUM=`cat /proc/cpuinfo | grep "processor" | wc -l`
 ###################################################################################
