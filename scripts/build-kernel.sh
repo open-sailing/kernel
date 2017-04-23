@@ -37,6 +37,7 @@ Example:
     ./scripts/build-kernel.sh --module --cross=aarch64-linux-gnu-
 
     ./scripts/build-kernel.sh --allflush
+    ./scripts/build-kernel.sh --startup
     ./scripts/build-kernel.sh --startup --startup_disk=sdb1
     ./scripts/build-kernel.sh --startup --startup_disk=nvme0n1
     ./scripts/build-kernel.sh clean
@@ -78,11 +79,13 @@ build_kernel()
 ###################################################################################
 auto_install()
 {
+    image=Image-debug
     install_path=/root/$STARTUP_DISK
     distro_name=`uname -a | awk '{print $2}'`
     disk_info=`blkid | grep LABEL`
     install_disk=`expr "${disk_info}" : '\([^:]*\):[^:]*'`
     root_dev=`mount | grep  "on / type" | awk '{print $1}'`
+    default_menuentry="${platform}"_"${distro_name}"_console_debug
     root_dev_info=`blkid -s PARTUUID $root_dev 2>/dev/null | grep -o "PARTUUID=.*" | sed 's/\"//g'`
     boot_dev_info=`blkid -s UUID $install_disk 2>/dev/null | grep -o "UUID=.*" | sed 's/\"//g'`
     boot_dev_uuid=`expr "${boot_dev_info}" : '[^=]*=\(.*\)'`
@@ -93,10 +96,15 @@ auto_install()
     fi
 
     mount /dev/$STARTUP_DISK $install_path
+    rm -rf $install_path/$image
+    cp $kernel_bin $install_path/$image
 
-    cp $kernel_bin $install_path/Image-debug
-    linux_arg="/Image-debug root=$root_dev_info rootwait rw pcie_aspm=off pci=pcie_bus_perf"
-    pushd $install_path >/dev/null
+    if grep -q '^set default='$default_menuentry''  $install_path/grub.cfg ; then
+	echo "Just replace /`$STARTUP_DISK/$image` kernel ... ..."
+    else
+	echo "first modify startup items... ..."
+        linux_arg="/$image root=$root_dev_info rootwait rw pcie_aspm=off pci=pcie_bus_perf"
+        pushd $install_path >/dev/null
 cat >> grub.cfg << EOF
 
 # Debug Booting from SATA/SAS with $distro_name rootfs (Console)
@@ -109,10 +117,9 @@ menuentry "${platform} $distro_name (Console) Debug" --id ${platform}_${distro_n
 EOF
     #get the startup linenum
     startup_line=`sed -n '/^set default=/='  $install_path/grub.cfg`
-    default_menuentry="${platform}"_"${distro_name}"_console_debug
     sed -i ''$startup_line's/.*/set default='$default_menuentry'/' $install_path/grub.cfg
-    sync
-    sleep 1
+    sync; sleep 1
+    fi
     popd
     #umount need add conditional judgment
     umount /dev/$STARTUP_DISK $install_path
@@ -197,16 +204,16 @@ if [ x"$CURDIR" = x"$TOPDIR" ]; then
 fi
 
 # build kernel or clean_kernel
-#if ! clean_kernel; then
-#        echo -e "\033[31mError! Clean kernel failed!\033[0m" ; exit 1
-#fi
-#
+if ! clean_kernel; then
+        echo -e "\033[31mError! Clean kernel failed!\033[0m" ; exit 1
+fi
+
 if ! build_project; then
         echo -e "\033[31mError! Build kernel failed!\033[0m" ; exit 1
 fi
 
 if [ x"$STARTUP" = x"yes" ]; then
-    echo "Startup deploy ...... \n"
+    echo -e "Startup deploy ...... \n"
     if ! auto_install; then
         echo -e "\033[31mError! Auto install startup disk failed!\033[0m" ; exit 1
     fi
