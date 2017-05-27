@@ -895,6 +895,13 @@ static int djtag_host_probe(struct platform_device *pdev)
 		goto fail;
 	}
 
+	/* Unlock djtag by setting module selection register to 0x3A/0xAA as init*/
+	if (host->djtag_ops == &djtag_v1_ops)
+		writel(SC_DJTAG_V1_UNLOCK,
+				host->sysctl_reg_map + SC_DJTAG_DEBUG_MODULE_SEL);
+	else
+		djtag_unlock_v2(host->sysctl_reg_map);
+
 	platform_set_drvdata(pdev, host);
 
 	rc = hisi_djtag_add_host(host);
