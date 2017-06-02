@@ -26,6 +26,7 @@
 #include <linux/syscalls.h>
 #include <linux/uaccess.h>
 #include <linux/io.h>
+#include <linux/kprobes.h>
 
 #include <asm/checksum.h>
 
@@ -51,6 +52,9 @@ EXPORT_SYMBOL(strnlen);
 EXPORT_SYMBOL(memset);
 EXPORT_SYMBOL(memcpy);
 EXPORT_SYMBOL(memmove);
+EXPORT_SYMBOL(__memset);
+EXPORT_SYMBOL(__memcpy);
+EXPORT_SYMBOL(__memmove);
 EXPORT_SYMBOL(memchr);
 EXPORT_SYMBOL(memcmp);
 
@@ -63,5 +67,11 @@ EXPORT_SYMBOL(change_bit);
 EXPORT_SYMBOL(test_and_change_bit);
 
 #ifdef CONFIG_FUNCTION_TRACER
+#ifdef CC_USING_FENTRY
+EXPORT_SYMBOL(__fentry__);
+NOKPROBE_SYMBOL(__fentry__);
+#else
 EXPORT_SYMBOL(_mcount);
+NOKPROBE_SYMBOL(_mcount);
+#endif
 #endif

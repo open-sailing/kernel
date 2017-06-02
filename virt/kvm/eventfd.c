@@ -283,20 +283,17 @@ static void irqfd_update(struct kvm *kvm, struct _irqfd *irqfd)
 {
 	struct kvm_kernel_irq_routing_entry *e;
 	struct kvm_kernel_irq_routing_entry entries[KVM_NR_IRQCHIPS];
-	int i, n_entries;
+	int n_entries;
 
 	n_entries = kvm_irq_map_gsi(kvm, entries, irqfd->gsi);
 
 	write_seqcount_begin(&irqfd->irq_entry_sc);
 
-	irqfd->irq_entry.type = 0;
-
 	e = entries;
-	for (i = 0; i < n_entries; ++i, ++e) {
-		/* Only fast-path MSI. */
-		if (e->type == KVM_IRQ_ROUTING_MSI)
-			irqfd->irq_entry = *e;
-	}
+	if (n_entries == 1)
+		irqfd->irq_entry = *e;
+	else
+		irqfd->irq_entry.type = 0;
 
 	write_seqcount_end(&irqfd->irq_entry_sc);
 }
@@ -616,12 +613,12 @@ void kvm_irq_routing_update(struct kvm *kvm)
 
 /*
  * create a host-wide workqueue for issuing deferred shutdown requests
- * aggregated from all vm* instances. We need our own isolated single-thread
- * queue to prevent deadlock against flushing the normal work-queue.
+ * aggregated from all vm* instances. We need our own isolated
+ * queue to ease flushing work items when a VM exits.
  */
 int kvm_irqfd_init(void)
 {
-	irqfd_cleanup_wq = create_singlethread_workqueue("kvm-irqfd-cleanup");
+	irqfd_cleanup_wq = alloc_workqueue("kvm-irqfd-cleanup", 0, 0);
 	if (!irqfd_cleanup_wq)
 		return -ENOMEM;
 

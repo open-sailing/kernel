@@ -25,6 +25,9 @@
 #include <linux/irq.h>
 #include <linux/kernel.h>
 #include <linux/export.h>
+#include <asm/irq_regs.h>
+#include <asm/virt.h>
+
 #include <linux/of.h>
 #include <linux/perf_event.h>
 #include <linux/platform_device.h>
@@ -421,6 +424,21 @@ armpmu_release_hardware(struct arm_pmu *armpmu)
 	}
 }
 
+static irqreturn_t armv8pmu_handle_irq(int irq_num, void *dev);
+
+static irqreturn_t armpmu_dispatch_irq(int irq, void *dev)
+{
+	int ret;
+	u64 start_clock, finish_clock;
+
+	start_clock = sched_clock();
+	ret = armv8pmu_handle_irq(irq, dev);
+	finish_clock = sched_clock();
+
+	perf_sample_event_took(finish_clock - start_clock);
+	return ret;
+}
+
 static void
 armpmu_enable_percpu_irq(void *data)
 {
@@ -453,7 +471,7 @@ armpmu_reserve_hardware(struct arm_pmu *armpmu)
 	}
 
 	if (irq_is_percpu(irq)) {
-		err = request_percpu_irq(irq, armpmu->handle_irq,
+		err = request_percpu_irq(irq, armpmu_dispatch_irq,
 				"arm-pmu", &cpu_hw_events);
 
 		if (err) {
@@ -487,8 +505,8 @@ armpmu_reserve_hardware(struct arm_pmu *armpmu)
 				continue;
 			}
 
-			err = request_irq(irq, armpmu->handle_irq,
-					IRQF_NOBALANCING,
+			err = request_irq(irq, armpmu_dispatch_irq,
+					IRQF_NOBALANCING | IRQF_NO_THREAD,
 					"arm-pmu", armpmu);
 			if (err) {
 				pr_err("unable to request IRQ%d for ARM PMU counters\n",
@@ -846,6 +864,7 @@ static const unsigned armv8_pmuv3_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
 #define ARMV8_PMCR_D		(1 << 3) /* CCNT counts every 64th cpu cycle */
 #define ARMV8_PMCR_X		(1 << 4) /* Export to ETM */
 #define ARMV8_PMCR_DP		(1 << 5) /* Disable CCNT if non-invasive debug*/
+#define ARMV8_PMCR_LC		(1 << 6) /* Overflow on 64 bit cycle counter */
 #define	ARMV8_PMCR_N_SHIFT	11	 /* Number of counters supported */
 #define	ARMV8_PMCR_N_MASK	0x1f
 #define	ARMV8_PMCR_MASK		0x3f	 /* Mask for writable bits */
@@ -859,8 +878,8 @@ static const unsigned armv8_pmuv3_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
 /*
  * PMXEVTYPER: Event selection reg
  */
-#define	ARMV8_EVTYPE_MASK	0xc80003ff	/* Mask for writable bits */
-#define	ARMV8_EVTYPE_EVENT	0x3ff		/* Mask for EVENT bits */
+#define	ARMV8_EVTYPE_MASK	0xc800ffff	/* Mask for writable bits */
+#define	ARMV8_EVTYPE_EVENT	0xffff		/* Mask for EVENT bits */
 
 /*
  * Event filters for PMUv3
@@ -946,9 +965,16 @@ static inline void armv8pmu_write_counter(int idx, u32 value)
 	if (!armv8pmu_counter_valid(idx))
 		pr_err("CPU%u writing wrong counter %d\n",
 			smp_processor_id(), idx);
-	else if (idx == ARMV8_IDX_CYCLE_COUNTER)
-		asm volatile("msr pmccntr_el0, %0" :: "r" (value));
-	else if (armv8pmu_select_counter(idx) == idx)
+	else if (idx == ARMV8_IDX_CYCLE_COUNTER) {
+		/*
+		 * Set the upper 32bits as this is a 64bit counter but we only
+		 * count using the lower 32bits and we want an interrupt when
+		 * it overflows.
+		 */
+		u64 value64 = 0xffffffff00000000ULL | value;
+
+		asm volatile("msr pmccntr_el0, %0" :: "r" (value64));
+	} else if (armv8pmu_select_counter(idx) == idx)
 		asm volatile("msr pmxevcntr_el0, %0" :: "r" (value));
 }
 
@@ -1216,9 +1242,12 @@ static int armv8pmu_set_event_filter(struct hw_perf_event *event,
 
 	if (attr->exclude_idle)
 		return -EPERM;
+	if (is_kernel_in_hyp_mode() &&
+	    attr->exclude_kernel != attr->exclude_hv)
+		return -EINVAL;
 	if (attr->exclude_user)
 		config_base |= ARMV8_EXCLUDE_EL0;
-	if (attr->exclude_kernel)
+	if (!is_kernel_in_hyp_mode() && attr->exclude_kernel)
 		config_base |= ARMV8_EXCLUDE_EL1;
 	if (!attr->exclude_hv)
 		config_base |= ARMV8_INCLUDE_EL2;
@@ -1240,8 +1269,11 @@ static void armv8pmu_reset(void *info)
 	for (idx = ARMV8_IDX_CYCLE_COUNTER; idx < nb_cnt; ++idx)
 		armv8pmu_disable_event(NULL, idx);
 
-	/* Initialize & Reset PMNC: C and P bits. */
-	armv8pmu_pmcr_write(ARMV8_PMCR_P | ARMV8_PMCR_C);
+	/*
+	 * Initialize & Reset PMNC. Request overflow interrupt for
+	 * 64 bit cycle counter but cheat in armv8pmu_write_counter().
+	 */
+	armv8pmu_pmcr_write(ARMV8_PMCR_P | ARMV8_PMCR_C | ARMV8_PMCR_LC);
 }
 
 static int armv8_pmuv3_map_event(struct perf_event *event)
@@ -1394,6 +1426,7 @@ static int __init init_hw_perf_events(void)
 
 	switch ((dfr >> 8) & 0xf) {
 	case 0x1:	/* PMUv3 */
+	case 0x4:	/* PMUv3 armv8.1 */
 		cpu_pmu = armv8_pmuv3_pmu_init();
 		break;
 	}

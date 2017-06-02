@@ -29,6 +29,7 @@
 #include <linux/user.h>
 #include <linux/seccomp.h>
 #include <linux/security.h>
+#include <linux/syscalls.h>
 #include <linux/init.h>
 #include <linux/signal.h>
 #include <linux/uaccess.h>
@@ -45,9 +46,87 @@
 #include <asm/syscall.h>
 #include <asm/traps.h>
 #include <asm/system_misc.h>
+#include <asm/signal_ilp32.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/syscalls.h>
+
+#define ARM_pstate	pstate
+#define ARM_pc		pc
+#define ARM_sp		sp
+#define ARM_x30		regs[30]
+#define ARM_x29		regs[29]
+#define ARM_x28		regs[28]
+#define ARM_x27		regs[27]
+#define ARM_x26		regs[26]
+#define ARM_x25		regs[25]
+#define ARM_x24		regs[24]
+#define ARM_x23		regs[23]
+#define ARM_x22		regs[22]
+#define ARM_x21		regs[21]
+#define ARM_x20		regs[20]
+#define ARM_x19		regs[19]
+#define ARM_x18		regs[18]
+#define ARM_x17		regs[17]
+#define ARM_x16		regs[16]
+#define ARM_x15		regs[15]
+#define ARM_x14		regs[14]
+#define ARM_x13		regs[13]
+#define ARM_x12		regs[12]
+#define ARM_x11		regs[11]
+#define ARM_x10		regs[10]
+#define ARM_x9		regs[9]
+#define ARM_x8		regs[8]
+#define ARM_x7		regs[7]
+#define ARM_x6		regs[6]
+#define ARM_x5		regs[5]
+#define ARM_x4		regs[4]
+#define ARM_x3		regs[3]
+#define ARM_x2		regs[2]
+#define ARM_x1		regs[1]
+#define ARM_x0		regs[0]
+
+#define REG_OFFSET_NAME(r) \
+	{.name = #r, .offset = offsetof(struct pt_regs, ARM_##r)}
+#define REG_OFFSET_END {.name = NULL, .offset = 0}
+
+const struct pt_regs_offset regs_offset_table[] = {
+	REG_OFFSET_NAME(x0),
+	REG_OFFSET_NAME(x1),
+	REG_OFFSET_NAME(x2),
+	REG_OFFSET_NAME(x3),
+	REG_OFFSET_NAME(x4),
+	REG_OFFSET_NAME(x5),
+	REG_OFFSET_NAME(x6),
+	REG_OFFSET_NAME(x7),
+	REG_OFFSET_NAME(x8),
+	REG_OFFSET_NAME(x9),
+	REG_OFFSET_NAME(x10),
+	REG_OFFSET_NAME(x11),
+	REG_OFFSET_NAME(x12),
+	REG_OFFSET_NAME(x13),
+	REG_OFFSET_NAME(x14),
+	REG_OFFSET_NAME(x15),
+	REG_OFFSET_NAME(x16),
+	REG_OFFSET_NAME(x17),
+	REG_OFFSET_NAME(x18),
+	REG_OFFSET_NAME(x19),
+	REG_OFFSET_NAME(x20),
+	REG_OFFSET_NAME(x21),
+	REG_OFFSET_NAME(x22),
+	REG_OFFSET_NAME(x23),
+	REG_OFFSET_NAME(x24),
+	REG_OFFSET_NAME(x25),
+	REG_OFFSET_NAME(x26),
+	REG_OFFSET_NAME(x27),
+	REG_OFFSET_NAME(x28),
+	REG_OFFSET_NAME(x29),
+	REG_OFFSET_NAME(x30),
+	REG_OFFSET_NAME(sp),
+	REG_OFFSET_NAME(pc),
+	REG_OFFSET_NAME(pstate),
+	REG_OFFSET_END,
+};
 
 /*
  * TODO: does not yet catch signals sent when the child dies.
@@ -83,10 +162,10 @@ static void ptrace_hbptriggered(struct perf_event *bp,
 		.si_addr	= (void __user *)(bkpt->trigger),
 	};
 
-#ifdef CONFIG_COMPAT
+#ifdef CONFIG_AARCH32_EL0
 	int i;
 
-	if (!is_compat_task())
+	if (!is_a32_compat_task())
 		goto send_sig;
 
 	for (i = 0; i < ARM_MAX_BRP; ++i) {
@@ -227,13 +306,13 @@ static int ptrace_hbp_fill_attr_ctrl(unsigned int note_type,
 				     struct arch_hw_breakpoint_ctrl ctrl,
 				     struct perf_event_attr *attr)
 {
-	int err, len, type, disabled = !ctrl.enabled;
+	int err, len, type, offset, disabled = !ctrl.enabled;
 
 	attr->disabled = disabled;
 	if (disabled)
 		return 0;
 
-	err = arch_bp_generic_fields(ctrl, &len, &type);
+	err = arch_bp_generic_fields(ctrl, &len, &type, &offset);
 	if (err)
 		return err;
 
@@ -252,6 +331,7 @@ static int ptrace_hbp_fill_attr_ctrl(unsigned int note_type,
 
 	attr->bp_len	= len;
 	attr->bp_type	= type;
+	attr->bp_addr	+= offset;
 
 	return 0;
 }
@@ -304,7 +384,7 @@ static int ptrace_hbp_get_addr(unsigned int note_type,
 	if (IS_ERR(bp))
 		return PTR_ERR(bp);
 
-	*addr = bp ? bp->attr.bp_addr : 0;
+	*addr = bp ? counter_arch_bp(bp)->address : 0;
 	return 0;
 }
 
@@ -450,6 +530,8 @@ static int hw_break_set(struct task_struct *target,
 	/* (address, ctrl) registers */
 	limit = regset->n * regset->size;
 	while (count && offset < limit) {
+		if (count < PTRACE_HBP_ADDR_SZ)
+			return -EINVAL;
 		ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf, &addr,
 					 offset, offset + PTRACE_HBP_ADDR_SZ);
 		if (ret)
@@ -459,6 +541,8 @@ static int hw_break_set(struct task_struct *target,
 			return ret;
 		offset += PTRACE_HBP_ADDR_SZ;
 
+		if (!count)
+			break;
 		ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf, &ctrl,
 					 offset, offset + PTRACE_HBP_CTRL_SZ);
 		if (ret)
@@ -495,7 +579,7 @@ static int gpr_set(struct task_struct *target, const struct user_regset *regset,
 		   const void *kbuf, const void __user *ubuf)
 {
 	int ret;
-	struct user_pt_regs newregs;
+	struct user_pt_regs newregs = task_pt_regs(target)->user_regs;
 
 	ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf, &newregs, 0, -1);
 	if (ret)
@@ -525,7 +609,8 @@ static int fpr_set(struct task_struct *target, const struct user_regset *regset,
 		   const void *kbuf, const void __user *ubuf)
 {
 	int ret;
-	struct user_fpsimd_state newstate;
+	struct user_fpsimd_state newstate =
+		target->thread.fpsimd_state.user_fpsimd;
 
 	ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf, &newstate, 0, -1);
 	if (ret)
@@ -549,7 +634,7 @@ static int tls_set(struct task_struct *target, const struct user_regset *regset,
 		   const void *kbuf, const void __user *ubuf)
 {
 	int ret;
-	unsigned long tls;
+	unsigned long tls = target->thread.tp_value;
 
 	ret = user_regset_copyin(&pos, &count, &kbuf, &ubuf, &tls, 0, -1);
 	if (ret)
@@ -658,7 +743,7 @@ static const struct user_regset_view user_aarch64_view = {
 	.regsets = aarch64_regsets, .n = ARRAY_SIZE(aarch64_regsets)
 };
 
-#ifdef CONFIG_COMPAT
+#ifdef CONFIG_AARCH32_EL0
 #include <linux/compat.h>
 
 enum compat_regset {
@@ -837,8 +922,8 @@ static const struct user_regset aarch32_regsets[] = {
 	[REGSET_COMPAT_GPR] = {
 		.core_note_type = NT_PRSTATUS,
 		.n = COMPAT_ELF_NGREG,
-		.size = sizeof(compat_elf_greg_t),
-		.align = sizeof(compat_elf_greg_t),
+		.size = sizeof(compat_a32_elf_greg_t),
+		.align = sizeof(compat_a32_elf_greg_t),
 		.get = compat_gpr_get,
 		.set = compat_gpr_set
 	},
@@ -871,7 +956,7 @@ static int compat_ptrace_read_user(struct task_struct *tsk, compat_ulong_t off,
 		tmp = tsk->mm->start_data;
 	else if (off == COMPAT_PT_TEXT_END_ADDR)
 		tmp = tsk->mm->end_code;
-	else if (off < sizeof(compat_elf_gregset_t))
+	else if (off < sizeof(compat_a32_elf_gregset_t))
 		return copy_regset_to_user(tsk, &user_aarch32_view,
 					   REGSET_COMPAT_GPR, off,
 					   sizeof(compat_ulong_t), ret);
@@ -892,7 +977,7 @@ static int compat_ptrace_write_user(struct task_struct *tsk, compat_ulong_t off,
 	if (off & 3 || off >= COMPAT_USER_SZ)
 		return -EIO;
 
-	if (off >= sizeof(compat_elf_gregset_t))
+	if (off >= sizeof(compat_a32_elf_gregset_t))
 		return 0;
 
 	set_fs(KERNEL_DS);
@@ -1034,15 +1119,17 @@ static int compat_ptrace_sethbpregs(struct task_struct *tsk, compat_long_t num,
 }
 #endif	/* CONFIG_HAVE_HW_BREAKPOINT */
 
-long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
+static long compat_a32_ptrace(struct task_struct *child, compat_long_t request,
 			compat_ulong_t caddr, compat_ulong_t cdata)
 {
 	unsigned long addr = caddr;
 	unsigned long data = cdata;
 	void __user *datap = compat_ptr(data);
+	unsigned int pr_reg_size = sizeof(compat_a32_elf_gregset_t);
 	int ret;
 
 	switch (request) {
+
 		case PTRACE_PEEKUSR:
 			ret = compat_ptrace_read_user(child, addr, datap);
 			break;
@@ -1054,17 +1141,15 @@ long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
 		case COMPAT_PTRACE_GETREGS:
 			ret = copy_regset_to_user(child,
 						  &user_aarch32_view,
-						  REGSET_COMPAT_GPR,
-						  0, sizeof(compat_elf_gregset_t),
-						  datap);
+						  REGSET_COMPAT_GPR, 0,
+						  pr_reg_size, datap);
 			break;
 
 		case COMPAT_PTRACE_SETREGS:
 			ret = copy_regset_from_user(child,
 						    &user_aarch32_view,
-						    REGSET_COMPAT_GPR,
-						    0, sizeof(compat_elf_gregset_t),
-						    datap);
+						    REGSET_COMPAT_GPR, 0,
+						    pr_reg_size, datap);
 			break;
 
 		case COMPAT_PTRACE_GET_THREAD_AREA:
@@ -1111,12 +1196,127 @@ long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
 
 	return ret;
 }
+
+COMPAT_SYSCALL_DEFINE4(aarch32_ptrace, compat_long_t, request,
+		       compat_long_t, pid, compat_long_t, addr,
+		       compat_long_t, data)
+{
+	struct task_struct *child;
+	long ret;
+
+	if (request == PTRACE_TRACEME) {
+		ret = ptrace_traceme();
+		goto out;
+	}
+
+	child = ptrace_get_task_struct(pid);
+	if (IS_ERR(child)) {
+		ret = PTR_ERR(child);
+		goto out;
+	}
+
+	if (request == PTRACE_ATTACH || request == PTRACE_SEIZE) {
+		ret = ptrace_attach(child, request, addr, data);
+		goto out_put_task_struct;
+	}
+
+	ret = ptrace_check_attach(child, request == PTRACE_KILL ||
+				  request == PTRACE_INTERRUPT);
+	if (!ret) {
+		ret = compat_a32_ptrace(child, request, addr, data);
+		if (ret || request != PTRACE_DETACH)
+			ptrace_unfreeze_traced(child);
+	}
+
+ out_put_task_struct:
+	put_task_struct(child);
+ out:
+	return ret;
+}
+
+#endif /* CONFIG_AARCH32_EL0 */
+
+#ifdef CONFIG_ARM64_ILP32
+
+static int compat_ilp32_ptrace(struct task_struct *child, compat_long_t request,
+			compat_ulong_t addr, compat_ulong_t data)
+{
+	compat_ulong_t __user *datap = compat_ptr(data);
+	int ret;
+
+	switch (request) {
+	case PTRACE_GETSIGMASK:
+		if (addr != sizeof(compat_sigset_t)) {
+			ret = -EINVAL;
+			break;
+		}
+
+		if (put_sigset_t((compat_sigset_t __user *)datap, &child->blocked))
+			ret = -EFAULT;
+		else
+			ret = 0;
+		break;
+
+	case PTRACE_SETSIGMASK: {
+		sigset_t new_set;
+		if (addr != sizeof(compat_sigset_t)) {
+			ret = -EINVAL;
+			break;
+		}
+
+		if (get_sigset_t(&new_set, (compat_sigset_t __user *)datap)) {
+			ret = -EFAULT;
+			break;
+		}
+
+		sigdelsetmask(&new_set, sigmask(SIGKILL)|sigmask(SIGSTOP));
+
+		/*
+		 * Every thread does recalc_sigpending() after resume, so
+		 * retarget_shared_pending() and recalc_sigpending() are not
+		 * called here.
+		 */
+		spin_lock_irq(&child->sighand->siglock);
+		child->blocked = new_set;
+		spin_unlock_irq(&child->sighand->siglock);
+
+		ret = 0;
+		break;
+	}
+
+	default:
+		ret = compat_ptrace_request(child, request, addr, data);
+	}
+
+	return ret;
+}
+
+#endif /* CONFIG_ARM64_ILP32 */
+
+#ifdef CONFIG_COMPAT
+
+long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
+			compat_ulong_t caddr, compat_ulong_t cdata)
+{
+#ifdef CONFIG_ARM64_ILP32
+	return compat_ilp32_ptrace(child, request, caddr, cdata);
+#else
+	return compat_ptrace_request(child, request, caddr, cdata);
+#endif
+}
+
 #endif /* CONFIG_COMPAT */
 
 const struct user_regset_view *task_user_regset_view(struct task_struct *task)
 {
-#ifdef CONFIG_COMPAT
-	if (is_compat_thread(task_thread_info(task)))
+#ifdef CONFIG_AARCH32_EL0
+	/*
+	 * Core dumping of 32-bit tasks or compat ptrace requests must use the
+	 * user_aarch32_view compatible with arm32. Native ptrace requests on
+	 * 32-bit children use an extended user_aarch32_ptrace_view to allow
+	 * access to the TLS register.
+	 */
+	if (is_a32_compat_thread(task_thread_info(task)))
 		return &user_aarch32_view;
 #endif
 	return &user_aarch64_view;
@@ -1143,7 +1343,7 @@ static void tracehook_report_syscall(struct pt_regs *regs,
 	 * A scratch register (ip(r12) on AArch32, x7 on AArch64) is
 	 * used to denote syscall entry/exit:
 	 */
-	regno = (is_compat_task() ? 12 : 7);
+	regno = (is_a32_compat_task() ? 12 : 7);
 	saved_reg = regs->regs[regno];
 	regs->regs[regno] = dir;
 
@@ -1254,7 +1454,7 @@ int valid_user_regs(struct user_pt_regs *regs, struct task_struct *task)
 	if (!test_tsk_thread_flag(task, TIF_SINGLESTEP))
 		regs->pstate &= ~DBG_SPSR_SS;
 
-	if (is_compat_thread(task_thread_info(task)))
+	if (is_a32_compat_thread(task_thread_info(task)))
 		return valid_compat_regs(regs);
 	else
 		return valid_native_regs(regs);

@@ -113,6 +113,8 @@ struct pt_regs {
 			u64 sp;
 			u64 pc;
 			u64 pstate;
+			u64 flags;
+			u64 padding;
 		};
 	};
 	u64 orig_x0;
@@ -121,9 +123,11 @@ struct pt_regs {
 	u64 unused;	// maintain 16 byte alignment
 };
 
+#define MAX_REG_OFFSET (sizeof(struct user_pt_regs) - sizeof(u64))
+
 #define arch_has_single_step()	(1)
 
-#ifdef CONFIG_COMPAT
+#ifdef CONFIG_AARCH32_EL0
 #define compat_thumb_mode(regs) \
 	(((regs)->pstate & COMPAT_PSR_T_BIT))
 #else
@@ -145,9 +149,28 @@ struct pt_regs {
 
 #define fast_interrupts_enabled(regs) \
 	(!((regs)->pstate & PSR_F_BIT))
+/**
+ * regs_get_register() - get register value from its offset
+ * @regs:	   pt_regs from which register value is gotten
+ * @offset:    offset number of the register.
+ *
+ * regs_get_register returns the value of a register whose offset from @regs.
+ * The @offset is the offset of the register in struct pt_regs.
+ * If @offset is bigger than MAX_REG_OFFSET, this returns 0.
+ */
+static inline u64 regs_get_register(struct pt_regs *regs,
+					      unsigned int offset)
+{
+	if (unlikely(offset > MAX_REG_OFFSET))
+		return 0;
+	return *(u64 *)((u64)regs + offset);
+}
 
-#define user_stack_pointer(regs) \
-	(!compat_user_mode(regs) ? (regs)->sp : (regs)->compat_sp)
+/* Valid only for Kernel mode traps. */
+static inline unsigned long kernel_stack_pointer(struct pt_regs *regs)
+{
+	return regs->sp;
+}
 
 static inline unsigned long regs_return_value(struct pt_regs *regs)
 {
@@ -158,12 +181,42 @@ static inline unsigned long regs_return_value(struct pt_regs *regs)
 struct task_struct;
 int valid_user_regs(struct user_pt_regs *regs, struct task_struct *task);
 
-#define instruction_pointer(regs)	((unsigned long)(regs)->pc)
+#define GET_USP(regs) \
+	(!compat_user_mode(regs) ? (regs)->sp : (regs)->compat_sp)
+
+#define SET_USP(regs, val)				\
+	do {						\
+		if (compat_user_mode(regs))		\
+			(regs)->compat_sp = val;	\
+		else					\
+			(regs)->sp = val;		\
+	} while (0)
+
+#define GET_FP(regs) \
+	(!compat_user_mode(regs) ? (regs)->regs[29] : (regs)->compat_fp)
+
+#define SET_FP(regs, val)				\
+	do {						\
+		if (compat_user_mode(regs))		\
+			(regs)->compat_fp = val;	\
+		else					\
+			(regs)->regs[29] = val;		\
+	} while (0)
+
+#include <asm-generic/ptrace.h>
+
+#define stack_pointer(regs)		((regs)->sp)
+#define procedure_link_pointer(regs)	((regs)->regs[30])
+
+static inline void procedure_link_pointer_set(struct pt_regs *regs,
+					   unsigned long val)
+{
+	procedure_link_pointer(regs) = val;
+}
 
 #ifdef CONFIG_SMP
+#undef profile_pc
 extern unsigned long profile_pc(struct pt_regs *regs);
-#else
-#define profile_pc(regs) instruction_pointer(regs)
 #endif
 
 #endif /* __ASSEMBLY__ */

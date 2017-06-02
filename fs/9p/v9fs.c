@@ -32,6 +32,7 @@
 #include <linux/parser.h>
 #include <linux/idr.h>
 #include <linux/slab.h>
+#include <linux/pagemap.h>
 #include <net/9p/9p.h>
 #include <net/9p/client.h>
 #include <net/9p/transport.h>
@@ -56,7 +57,7 @@ enum {
 	/* Options that take no arguments */
 	Opt_nodevmap,
 	/* Cache options */
-	Opt_cache_loose, Opt_fscache, Opt_mmap,
+	Opt_cache_loose, Opt_fscache, Opt_mmap, Opt_drop_cache,
 	/* Access options */
 	Opt_access, Opt_posixacl,
 	/* Error token */
@@ -78,8 +79,53 @@ static const match_table_t tokens = {
 	{Opt_cachetag, "cachetag=%s"},
 	{Opt_access, "access=%s"},
 	{Opt_posixacl, "posixacl"},
+	{Opt_drop_cache, "drop_cache"},
 	{Opt_err, NULL}
 };
+
+void evict_inodes(struct super_block *sb);
+
+int v9fs_remount(struct super_block *super, int *mount_flags, char *opts)
+{
+	int ret = 0;
+	char *options, *tmp_options;
+	substring_t args[MAX_OPT_ARGS];
+	char *p;
+	int drop_cache = 0;
+
+	if (!opts)
+		return 0;
+
+	tmp_options = kstrdup(opts, GFP_KERNEL);
+	if (!tmp_options) {
+		ret = -ENOMEM;
+		goto exit;
+	}
+	options = tmp_options;
+
+	while ((p = strsep(&options, ",")) != NULL) {
+		int token;
+		if (!*p)
+			continue;
+		token = match_token(p, tokens, args);
+		switch (token) {
+		case Opt_drop_cache:
+			drop_cache = 1;
+			break;
+		default:
+			continue;
+		}
+	}
+	kfree(tmp_options);
+
+	if (drop_cache) {
+		sync_filesystem(super);
+		evict_inodes(super);
+		printk("v9fs (%s): cache dropped\n", super->s_id);
+	}
+ exit:
+	return ret;
+}
 
 /* Interpret mount options for cache mode */
 static int get_cache_mode(char *s)
@@ -309,6 +355,56 @@ fail_option_alloc:
 	return ret;
 }
 
+#if defined(CONFIG_KVM_GUEST_MICROVM)
+void put_flush_set(struct v9fs_flush_set *fset)
+{
+	if (!fset)
+		return;
+	kfree(fset->pages);
+	kfree(fset->buf);
+	kfree(fset);
+}
+
+#define MAX_FLUSH_DATA_SIZE (262144)
+
+/**
+ * Allocate and initialize flush set
+ * Pre-conditions: valid msize is set
+ */
+int alloc_init_flush_set(struct v9fs_session_info *v9ses)
+{
+	int ret = -ENOMEM;
+	int num_pages;
+	struct v9fs_flush_set *fset = NULL;
+
+	num_pages = v9ses->clnt->msize >> PAGE_CACHE_SHIFT;
+	if (num_pages < 2)
+		/* speedup impossible */
+		return 0;
+	if (num_pages > (MAX_FLUSH_DATA_SIZE >> PAGE_SHIFT))
+		/*
+		 * no performance gain with larger values
+		 */
+		num_pages = MAX_FLUSH_DATA_SIZE >> PAGE_SHIFT;
+	fset = kzalloc(sizeof(*fset), GFP_KERNEL);
+	if (!fset)
+		goto error;
+	fset->num_pages = num_pages;
+	fset->pages = kcalloc(num_pages, sizeof(*fset->pages), GFP_KERNEL);
+	if (!fset->pages)
+		goto error;
+	fset->buf = kzalloc(num_pages << PAGE_CACHE_SHIFT, GFP_KERNEL);
+	if (!fset->buf)
+		goto error;
+	spin_lock_init(&(fset->lock));
+	v9ses->flush = fset;
+	return 0;
+ error:
+	put_flush_set(fset);
+	return ret;
+}
+#endif /* CONFIG_KVM_GUEST_MICROVM */
+
 /**
  * v9fs_session_init - initialize session
  * @v9ses: session information structure
@@ -320,31 +416,21 @@ fail_option_alloc:
 struct p9_fid *v9fs_session_init(struct v9fs_session_info *v9ses,
 		  const char *dev_name, char *data)
 {
-	int retval = -EINVAL;
 	struct p9_fid *fid;
-	int rc;
+	int rc = -ENOMEM;
 
 	v9ses->uname = kstrdup(V9FS_DEFUSER, GFP_KERNEL);
 	if (!v9ses->uname)
-		return ERR_PTR(-ENOMEM);
+		goto err_names;
 
 	v9ses->aname = kstrdup(V9FS_DEFANAME, GFP_KERNEL);
-	if (!v9ses->aname) {
-		kfree(v9ses->uname);
-		return ERR_PTR(-ENOMEM);
-	}
+	if (!v9ses->aname)
+		goto err_names;
 	init_rwsem(&v9ses->rename_sem);
 
 	rc = bdi_setup_and_register(&v9ses->bdi, "9p");
-	if (rc) {
-		kfree(v9ses->aname);
-		kfree(v9ses->uname);
-		return ERR_PTR(rc);
-	}
-
-	spin_lock(&v9fs_sessionlist_lock);
-	list_add(&v9ses->slist, &v9fs_sessionlist);
-	spin_unlock(&v9fs_sessionlist_lock);
+	if (rc)
+		goto err_names;
 
 	v9ses->uid = INVALID_UID;
 	v9ses->dfltuid = V9FS_DEFUID;
@@ -352,10 +438,9 @@ struct p9_fid *v9fs_session_init(struct v9fs_session_info *v9ses,
 
 	v9ses->clnt = p9_client_create(dev_name, data);
 	if (IS_ERR(v9ses->clnt)) {
-		retval = PTR_ERR(v9ses->clnt);
-		v9ses->clnt = NULL;
+		rc = PTR_ERR(v9ses->clnt);
 		p9_debug(P9_DEBUG_ERROR, "problem initializing 9p client\n");
-		goto error;
+		goto err_bdi;
 	}
 
 	v9ses->flags = V9FS_ACCESS_USER;
@@ -368,10 +453,8 @@ struct p9_fid *v9fs_session_init(struct v9fs_session_info *v9ses,
 	}
 
 	rc = v9fs_parse_options(v9ses, data);
-	if (rc < 0) {
-		retval = rc;
-		goto error;
-	}
+	if (rc < 0)
+		goto err_clnt;
 
 	v9ses->maxdata = v9ses->clnt->msize - P9_IOHDRSZ;
 
@@ -405,10 +488,9 @@ struct p9_fid *v9fs_session_init(struct v9fs_session_info *v9ses,
 	fid = p9_client_attach(v9ses->clnt, NULL, v9ses->uname, INVALID_UID,
 							v9ses->aname);
 	if (IS_ERR(fid)) {
-		retval = PTR_ERR(fid);
-		fid = NULL;
+		rc = PTR_ERR(fid);
 		p9_debug(P9_DEBUG_ERROR, "cannot attach\n");
-		goto error;
+		goto err_clnt;
 	}
 
 	if ((v9ses->flags & V9FS_ACCESS_MASK) == V9FS_ACCESS_SINGLE)
@@ -420,12 +502,20 @@ struct p9_fid *v9fs_session_init(struct v9fs_session_info *v9ses,
 	/* register the session for caching */
 	v9fs_cache_session_get_cookie(v9ses);
 #endif
+	spin_lock(&v9fs_sessionlist_lock);
+	list_add(&v9ses->slist, &v9fs_sessionlist);
+	spin_unlock(&v9fs_sessionlist_lock);
 
 	return fid;
 
-error:
+err_clnt:
+	p9_client_destroy(v9ses->clnt);
+err_bdi:
 	bdi_destroy(&v9ses->bdi);
-	return ERR_PTR(retval);
+err_names:
+	kfree(v9ses->uname);
+	kfree(v9ses->aname);
+	return ERR_PTR(rc);
 }
 
 /**
@@ -449,6 +539,10 @@ void v9fs_session_close(struct v9fs_session_info *v9ses)
 #endif
 	kfree(v9ses->uname);
 	kfree(v9ses->aname);
+
+#if defined(CONFIG_KVM_GUEST_MICROVM)
+	put_flush_set(v9ses->flush);
+#endif /* CONFIG_KVM_GUEST_MICROVM */
 
 	bdi_destroy(&v9ses->bdi);
 

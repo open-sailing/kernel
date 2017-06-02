@@ -33,7 +33,7 @@
 #include <scsi/sas_ata.h>
 
 #define sas_printk(fmt, ...) printk(KERN_NOTICE "sas: " fmt, ## __VA_ARGS__)
-
+#define SAS_WARN(fmt, ...) printk(KERN_WARNING "sas: " fmt, ## __VA_ARGS__)
 #define SAS_DPRINTK(fmt, ...) printk(KERN_DEBUG "sas: " fmt, ## __VA_ARGS__)
 
 #define TO_SAS_TASK(_scsi_cmd)  ((void *)(_scsi_cmd)->host_scribble)
@@ -50,6 +50,29 @@ struct sas_phy_data {
 	int enable_result;
 	struct sas_work enable_work;
 };
+
+enum sas_device_event {
+	SAS_DEVICE_ADD   = 0U,
+	SAS_DEVICE_DEL = 1,
+	SAS_DEVICE_NUM_EVENTS
+};
+
+struct sas_topo_event {
+	struct work_struct work;
+	struct domain_device *device;
+	enum sas_device_event event;
+};
+
+static inline struct sas_topo_event *to_sas_topo_event(struct work_struct *work)
+{
+	struct sas_topo_event *ev = container_of(work, typeof(*ev), work);
+
+	return ev;
+}
+
+extern struct workqueue_struct *topo_wq;
+extern const work_func_t sas_phy_event_fns[PHY_NUM_EVENTS];
+extern const work_func_t sas_port_event_fns[PORT_NUM_EVENTS];
 
 void sas_scsi_recover_host(struct Scsi_Host *shost);
 
@@ -99,6 +122,10 @@ void sas_hae_reset(struct work_struct *work);
 
 void sas_free_device(struct kref *kref);
 
+int sas_notify_device_event(struct domain_device *dev,
+			enum sas_device_event ev);
+void sas_discover_domain(struct asd_sas_port *port);
+
 #ifdef CONFIG_SCSI_SAS_HOST_SMP
 extern int sas_smp_host_handler(struct Scsi_Host *shost, struct request *req,
 				struct request *rsp);
@@ -119,6 +146,7 @@ static inline void sas_fail_probe(struct domain_device *dev, const char *func, i
 		    func, dev->parent ? "exp-attached" :
 					    "direct-attached",
 		    SAS_ADDR(dev->sas_addr), err);
+	set_bit(SAS_DEV_PROBE_FAIL, &dev->state);
 	sas_unregister_dev(dev->port, dev);
 }
 
@@ -169,13 +197,24 @@ static inline void sas_add_parent_port(struct domain_device *dev, int phy_id)
 	struct ex_phy *ex_phy = &ex->ex_phy[phy_id];
 
 	if (!ex->parent_port) {
-		ex->parent_port = sas_port_alloc(&dev->rphy->dev, phy_id);
+		ex->parent_port = sas_port_alloc_num(&dev->rphy->dev);
 		/* FIXME: error handling */
 		BUG_ON(!ex->parent_port);
 		BUG_ON(sas_port_add(ex->parent_port));
 		sas_port_mark_backlink(ex->parent_port);
 	}
 	sas_port_add_phy(ex->parent_port, ex_phy->phy);
+	ex_phy->port = ex->parent_port;
+}
+
+static inline void sas_del_parent_port(struct domain_device *dev)
+{
+	struct expander_device *ex = &dev->ex_dev;
+
+	if (ex->parent_port) {
+		sas_port_delete(ex->parent_port);
+		ex->parent_port = NULL;
+	}
 }
 
 static inline struct domain_device *sas_alloc_device(void)

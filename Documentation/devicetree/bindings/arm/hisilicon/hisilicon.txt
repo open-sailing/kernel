@@ -103,3 +103,85 @@ Required Properties:
   [1]: bootwrapper size
   [2]: relocation physical address
   [3]: relocation size
+
+-----------------------------------------------------------------------
+Hisilicon djtag r/w driver
+djtag:
+Required Properties:
+- compatible	    : Should include "hisilicon,hip05-djtag"
+		      or "hisilicon,hi1382-djtag"
+- syscon	    : implement r/w interfaces via which sysctrl node.
+- djtag-mutex-access-protection	: Present if djtag need add mutex access
+				  protection to fix conflict with firmware
+				  (like M3).
+
+Hisilicon L3 Cache Controller
+
+LLC(Last Level cache) is an alias of L3 cache, It is present in Hisilicon P660,
+Hi1610 and Hi1382 platforms. It has has no private space for register r/w, so
+we need to do register r/w via djtag of sysctrl.
+
+llc:
+Required Properties:
+- compatible        : Should include "hisilicon,hip05-llc"
+		      or "hisilicon,hi1382-llc"
+- djtag		    : which djtag node and its CPU die ID.
+		      The first region is the djtag node name.
+		      The second region is the CPU die ID of the djtag.
+		      /* socket 0: A die = 1; C die = 2; B die = 3; */
+		      /* socket 1: A die = 5; C die = 6; B die = 7; */
+
+Example:
+	/* If it have multi dies, set like below.
+	 *
+	 * We need sysctrl node for its register address and "syscon",
+	 * but we don't implement sysctrl driver and don't care about
+	 * what compatible it is. So this example use "hisilicon,xxx".
+	 */
+
+for Hisilicon P660(hip05) or Hi1610:
+	pa_sysctrl: system-controller@40010000 {
+	        compatible = "hisilicon,xxx", "syscon";
+	        reg = <0x40010000 0x10000>;
+	};
+
+	pc_sysctrl: system-controller@60010000 {
+	        compatible = "hisilicon,xxx", "syscon";
+	        reg = <0x60010000 0x10000>;
+	};
+
+	djtag0: djtag@0 {
+		compatible = "hisilicon,hip05-djtag";
+		syscon = <&pa_sysctrl>;
+	};
+
+	djtag1: djtag@1 {
+		compatible = "hisilicon,hip05-djtag";
+		syscon = <&pc_sysctrl>;
+	};
+
+	llc0: llc@0 {
+	        compatible = "hisilicon,hip05-llc";
+		djtag = <&djtag0 1>;
+	};
+
+	llc1: llc@1 {
+	        compatible = "hisilicon,hip05-llc";
+		djtag = <&djtag1 2>;
+	};
+
+for Hisilicon Hi1382(hi1382):
+	pc_sysctrl: system-controller@f1010000 {
+		compatible = "hisilicon,xxx", "syscon";
+		reg = <0xf1010000 0x10000>;
+	};
+
+	djtag0: djtag@0 {
+		compatible = "hisilicon,hi1382-djtag";
+		syscon = <&pc_sysctrl>;
+	};
+
+	llc0: llc@0{
+	      compatible = "hisilicon,hi1382-llc";
+	      djtag = <&djtag0 2>;
+	};

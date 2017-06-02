@@ -69,10 +69,9 @@ extern int ext3_xattr_set(struct inode *, int, const char *, const void *, size_
 extern int ext3_xattr_set_handle(handle_t *, struct inode *, int, const char *, const void *, size_t, int);
 
 extern void ext3_xattr_delete_inode(handle_t *, struct inode *);
-extern void ext3_xattr_put_super(struct super_block *);
 
-extern int init_ext3_xattr(void);
-extern void exit_ext3_xattr(void);
+extern struct mb_cache *ext3_xattr_create_cache(void);
+extern void ext3_xattr_destroy_cache(struct mb_cache *);
 
 extern const struct xattr_handler *ext3_xattr_handlers[];
 
@@ -104,19 +103,7 @@ ext3_xattr_delete_inode(handle_t *handle, struct inode *inode)
 {
 }
 
-static inline void
-ext3_xattr_put_super(struct super_block *sb)
-{
-}
-
-static inline int
-init_ext3_xattr(void)
-{
-	return 0;
-}
-
-static inline void
-exit_ext3_xattr(void)
+static inline void ext3_xattr_destroy_cache(struct mb_cache *cache)
 {
 }
 

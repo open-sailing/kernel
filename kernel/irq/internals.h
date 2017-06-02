@@ -193,7 +193,7 @@ static inline bool irqd_has_set(struct irq_data *d, unsigned int mask)
 	return d->state_use_accessors & mask;
 }
 
-static inline void kstat_incr_irqs_this_cpu(unsigned int irq, struct irq_desc *desc)
+static inline void kstat_incr_irqs_this_cpu(struct irq_desc *desc)
 {
 	__this_cpu_inc(*desc->kstat_irqs);
 	__this_cpu_inc(kstat.irqs_sum);

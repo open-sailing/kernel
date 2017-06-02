@@ -2,15 +2,16 @@
 #	EDAC Kconfig
 #	Copyright (c) 2008 Doug Thompson www.softwarebitmaker.com
 #	Licensed and distributed under the GPL
-#
+
+config EDAC_ATOMIC_SCRUB
+	bool
 
 config EDAC_SUPPORT
 	bool
 
 menuconfig EDAC
 	bool "EDAC (Error Detection And Correction) reporting"
-	depends on HAS_IOMEM
-	depends on X86 || PPC || TILE || ARM || EDAC_SUPPORT
+	depends on HAS_IOMEM && EDAC_SUPPORT
 	help
 	  EDAC is designed to report errors in the core system.
 	  These are low-level errors that are reported in the CPU or
@@ -391,5 +392,54 @@ config EDAC_SYNOPSYS
 	help
 	  Support for error detection and correction on the Synopsys DDR
 	  memory controller.
+
+config EDAC_HIP05
+	tristate "Hisilicon Hip05 SoC"
+	depends on EDAC_MM_EDAC && ARM64
+	help
+	  Support for error detection and correction on the
+	  Hisilicon Hip05 family of SoCs
+
+config EDAC_HISILICON_DDRC
+	tristate "Hisilicon DDR3/4 DRAM Controller"
+	depends on EDAC_MM_EDAC && ARM64
+	help
+	  Support for error detection and correction of DDRC
+	  on the Hisilicon Hip05 family of SoCs
+
+config EDAC_HISILICON_HHA
+	tristate "Hisilicon HCCS Home Agent"
+	depends on ARM64
+	help
+	  Support for error detection and correction of Hisilicon
+	  HCCS Home Agent on the Hisilicon Hip05 family of SoCs
+
+config EDAC_HISILICON_LLC
+	tristate "Hisilicon Last Level Cache"
+	depends on ARM64
+	help
+	  Support for error detection and correction of Hisilicon
+	  Last Level Cache on the Hisilicon Hip05 family of SoCs
+
+config EDAC_HISILICON_PA
+	tristate "Hisilicon Protocol Adapter"
+	depends on ARM64
+	help
+	  Support for error detection and correction of Hisilicon
+	  Protocol Adapter on the Hisilicon Hip05 family of SoCs
+
+config EDAC_HISILICON_SLLC
+	tristate "Hisilicon Skyros Link Layer Controller"
+	depends on ARM64
+	help
+	  Support for error detection and correction of Hisilicon
+	  Skyros Link Layer Controller on the Hisilicon Hip05 family of SoCs
+
+config EDAC_HISILICON_SMMU
+	tristate "Hisilicon System Memory Management Unit"
+	depends on ARM64
+	help
+	  Support for error detection and correction of Hisilicon
+	  System Memory Management Unit on the Hisilicon Hip05 family of SoCs
 
 endif # EDAC

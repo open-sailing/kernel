@@ -68,3 +68,10 @@ obj-$(CONFIG_EDAC_OCTEON_PCI)		+= octeon_edac-pci.o
 
 obj-$(CONFIG_EDAC_ALTERA_MC)		+= altera_edac.o
 obj-$(CONFIG_EDAC_SYNOPSYS)		+= synopsys_edac.o
+obj-$(CONFIG_EDAC_HIP05)		+= hip05_edac.o
+obj-$(CONFIG_EDAC_HISILICON_DDRC)	+= hi_edac_ddrc.o
+obj-$(CONFIG_EDAC_HISILICON_HHA)	+= hi_edac_hha.o
+obj-$(CONFIG_EDAC_HISILICON_LLC)	+= hi_edac_llc.o
+obj-$(CONFIG_EDAC_HISILICON_PA)		+= hi_edac_pa.o
+obj-$(CONFIG_EDAC_HISILICON_SLLC)	+= hi_edac_sllc.o
+obj-$(CONFIG_EDAC_HISILICON_SMMU)	+= hi_edac_smmu.o

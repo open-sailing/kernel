@@ -1,0 +1,342 @@
+/**
+ * dtsi file for Hisilicon Hi1610 16core Soc
+ *
+ * Copyright (C) 2014,2015 Hisilicon Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * publishhed by the Free Software Foundation.
+ *
+ */
+
+/ {
+	#address-cells = <2>;
+	#size-cells = <2>;
+	compatible = "hisilicon,hi1610_16c-EVB", "hisilicon,hi1610";
+	interrupt-parent = <&gic>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@20000 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20000>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20001 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20001>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20002 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20002>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20003 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20003>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20100 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20100>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20101 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20101>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20102 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20102>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20103 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20103>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20200 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20200>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20201 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20201>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20202 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20202>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20203 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20203>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20300 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20300>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20301 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20301>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20302 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20302>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+		cpu@20303 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20303>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+
+	};
+
+	gic: interrupt-controller@6d000000 {
+		compatible = "hisilicon,gic-v3";
+		#interrupt-cells = <3>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		status-clear-fixup;
+		interrupt-controller;
+		#redistributor-regions = <1>;
+		redistributor-stride = <0x0 0x30000>;
+		reg = <0x0 0x6d000000 0x0 0x10000>,	/* GICD */
+		      <0x0 0x6d100000 0x0 0x300000>,	/* GICR c*/
+		      <0x0 0xfe000000 0x0 0x10000>,	/* GICC */
+		      <0x0 0xfe010000 0x0 0x10000>,     /* GICH */
+		      <0x0 0xfe020000 0x0 0x10000>;     /* GICV */
+		interrupts = <1 9 0xff04>;
+
+		its_pc: interrupt-controller@6c000000 {
+			compatible = "arm,gic-v3-its";
+			msi-controller;
+			reg = <0x0 0x6c000000 0x0 0x1000000>;
+		};
+
+		its_dsa: interrupt-controller@0xc6000000 {
+			compatible = "arm,gic-v3-its";
+			msi-controller;
+			reg = <0x0 0xc6000000 0x0 0x1000000>;
+		};
+	};
+
+	smmu_pcie {
+		compatible = "arm,smmu-v3";
+		reg = <0x0 0xa0040000 0x0 0x20000>;
+		interrupt-parent  = <&mbigen_pcie>;
+		interrupts = <0x40b0c 3 39 7>,
+			     <0x40b0c 3 40 7>,
+			     <0x40b0c 3 41 7>;
+		interrupt-names = "eventq", "gerror", "priq";
+		#iommu-cells = <1>;
+		dma-coherent;
+		smmu-cb-memtype = <0x0 0x1>,
+				<0x40000 0x1>,
+				<0x40040 0x1>;
+	};
+
+	smmu_dsa {
+		compatible = "arm,smmu-v3";
+		reg = <0x0 0xc0040000 0x0 0x20000>;
+		interrupt-parent  = <&mbigen_dsa>;
+		interrupts = <0x40b20 3 78 6>,
+			     <0x40b20 3 79 6>,
+			     <0x40b20 3 80 6>;
+		interrupt-names = "eventq", "gerror", "priq";
+		#iommu-cells = <1>;
+		dma-coherent;
+		smmu-cb-memtype = <0x0 0x1>,
+				<0x100 0x1>;
+	};
+
+
+	smmu_alg {
+		compatible = "arm,smmu-v3";
+		reg = <0x0 0xd0040000 0x0 0x20000>;
+		interrupt-parent  = <&mbigen_alg>;
+		interrupts = <0x40b1b 3 29 6>,
+			     <0x40b1b 3 30 6>,
+			     <0x40b1b 3 31 6>;
+		interrupt-names = "eventq", "gerror", "priq";
+		#iommu-cells = <1>;
+		dma-coherent;
+		smmu-cb-memtype = <0x0 0x1>;
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupts = <1 13 4>,
+			     <1 14 4>,
+			     <1 11 4>,
+			     <1 10 4>;
+	};
+
+	pmu {
+		compatible = "arm,armv8-pmuv3";
+		interrupts = <1 7 4>;
+	};
+
+	soc {
+		compatible = "simple-bus";
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		refclk200mhz: refclk200mhz {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <200000000>;
+		};
+
+		serial0: uart@60300000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x0 0x60300000 0x0 0x10000>;
+			interrupts = <0 317 4>;
+			clocks = <&refclk200mhz>;
+			clock-names = "apb_pclk";
+			reg-shift = <2>;
+		};
+
+		mbigen_pc: interrupt-controller@6c030000 {
+			compatible = "hisilicon,mbi-gen";
+			msi-parent = <&its_pc>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			reg = <0x0 0x6c030000 0x0 0x10000>;
+		};
+
+		mbigen_dsa: interrupt-controller@c0080000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa>;
+			interrupt-controller;
+			#interrupt-cells = <4>;
+			reg = <0x0 0xc0080000 0x0 0x10000>;
+		};
+
+		mbigen_pcie: interrupt-controller@a0080000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa>;
+			interrupt-controller;
+			#interrupt-cells = <4>;
+			reg = <0x0 0xa0080000 0x0 0x10000>;
+		};
+
+		mbigen_alg: interrupt-controller@d0080000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa>;
+			interrupt-controller;
+			#interrupt-cells = <4>;
+			reg = <0x0 0xd0080000 0x0 0x10000>;
+		};
+
+		peri_c_subctrl: sub_ctrl_c@60000000 {
+			compatible = "hisilicon,peri-c-subctrl", "syscon";
+			reg = <0 0x60000000 0 0x10000>;
+		};
+
+		mdio {
+			compatible = "hisilicon,hns-mdio";
+			reg = <0x0 0x603c0000 0x0 0x1000>;
+			subctrl_vbase = <&peri_c_subctrl>;
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+
+			phy0: ethernet-phy@0 {
+				compatible = "ethernet-phy-ieee802.3-c22";
+				reg = <0>;
+			};
+
+			phy1: ethernet-phy@1 {
+				compatible = "ethernet-phy-ieee802.3-c22";
+				reg = <1>;
+			};
+		};
+
+		ppe: ppe@c2000000 {
+			compatible = "hisilicon, hip05-ppe", "syscon";
+			reg = <0 0xc2000000 0 0x1000>;
+		};
+
+		ge: ge@c2001000 {
+			compatible = "hisilicon, hip05-ge", "syscon";
+			reg = <0 0xc2001000 0 0x1000>;
+		};
+
+		gmac0: ethernet@c2080000 {
+			compatible = "hisilicon, hip05-mac";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0 0xc2080000 0 0x20000>,
+			      <0 0xc0000000 0 0x1000>;
+			interrupt-parent  = <&mbigen_dsa>;
+			interrupts = <0x40b1c 9 0 6>,
+				     <0x40b1c 9 1 6>;
+
+			phy-mode = "sgmii";
+			mac-address = [11 11 11 11 11 11];
+			phy-handle = <&phy0>;
+			ppe-handle = <&ppe 0>;
+			ge-handle = <&ge 10 1>;
+			dma-coherent;
+		};
+	};
+};

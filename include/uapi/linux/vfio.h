@@ -33,9 +33,6 @@
 /* Check if EEH is supported */
 #define VFIO_EEH			5
 
-/* Two-stage IOMMU */
-#define VFIO_TYPE1_NESTING_IOMMU	6	/* Implies v2 */
-
 /*
  * The IOCTL interface is designed for extensibility by embedding the
  * structure length (argsz) and flags into structures passed between
@@ -439,6 +436,28 @@ struct vfio_iommu_type1_dma_unmap {
  */
 #define VFIO_IOMMU_ENABLE	_IO(VFIO_TYPE, VFIO_BASE + 15)
 #define VFIO_IOMMU_DISABLE	_IO(VFIO_TYPE, VFIO_BASE + 16)
+
+/**
+ * VFIO_IOMMU_SET_ATTR - _IOR(VFIO_TYPE, VFIO_BASE + 17,
+ *						struct vfio_iommu_type1_attr)
+ *
+ * Set attribute of the IOMMU object. Fills in provided
+ * struct vfio_iommu_type1_attr. Caller sets all the elements.
+ */
+
+#define VFIO_IOMMU_ATTR_DOMAIN_TYPE_SHIFT (0)
+#define VFIO_IOMMU_ATTR_DOMAIN_TYPE_MASK \
+					(3 << VFIO_IOMMU_ATTR_DOMAIN_TYPE_SHIFT)
+#define VFIO_IOMMU_ATTR_S1		(0 << VFIO_IOMMU_ATTR_DOMAIN_TYPE_SHIFT)
+#define VFIO_IOMMU_ATTR_S2		(1 << VFIO_IOMMU_ATTR_DOMAIN_TYPE_SHIFT)
+#define VFIO_IOMMU_ATTR_NESTING		(2 << VFIO_IOMMU_ATTR_DOMAIN_TYPE_SHIFT)
+
+struct vfio_iommu_type1_attr {
+	__u32	argsz;
+	__u32	attribute;
+};
+
+#define VFIO_IOMMU_SET_ATTR _IO(VFIO_TYPE, VFIO_BASE + 17)
 
 /* -------- Additional API for SPAPR TCE (Server POWERPC) IOMMU -------- */
 

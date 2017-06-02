@@ -1,0 +1,590 @@
+/**
+ * dts file for Hisilicon Hi1610 Pangea Board
+ *
+ * Copyright (C) 2014-2016 Hisilicon Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * publishhed by the Free Software Foundation.
+ *
+ */
+
+/dts-v1/;
+
+/ {
+	#address-cells = <2>;
+	#size-cells = <2>;
+	model = "Hisilicon Hi1610 16core Pangea Board";
+	compatible = "hisilicon,hi1610", "hisilicon,hi1610-pangea";
+	interrupt-parent = <&gic>;
+	mem-extends = <0x0 0x6b000000 0x0 0x4000000 0x6
+			0x220 0x00000000 0x0 0x1000000 0xc>;
+
+	psci {
+		compatible = "arm,psci-0.2";
+		method = "smc";
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu-map {
+			cluster0 {
+				core0 {
+					cpu = <&CPU0>;
+				};
+
+				core1 {
+					cpu = <&CPU1>;
+				};
+
+				core2 {
+					cpu = <&CPU2>;
+				};
+
+				core3 {
+					cpu = <&CPU3>;
+				};
+			};
+			cluster1 {
+				core0 {
+					cpu = <&CPU4>;
+				};
+
+				core1 {
+					cpu = <&CPU5>;
+				};
+
+				core2 {
+					cpu = <&CPU6>;
+				};
+
+				core3 {
+					cpu = <&CPU7>;
+				};
+			};
+			cluster2 {
+				core0 {
+					cpu = <&CPU8>;
+				};
+
+				core1 {
+					cpu = <&CPU9>;
+				};
+
+				core2 {
+					cpu = <&CPU10>;
+				};
+
+				core3 {
+					cpu = <&CPU11>;
+				};
+			};
+			cluster3 {
+				core0 {
+					cpu = <&CPU12>;
+				};
+
+				core1 {
+					cpu = <&CPU13>;
+				};
+
+				core2 {
+					cpu = <&CPU14>;
+				};
+
+				core3 {
+					cpu = <&CPU15>;
+				};
+			};
+		};
+
+		CPU0: cpu@20000 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20000>;
+			enable-method = "psci";
+		};
+
+		CPU1: cpu@20001 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20001>;
+			enable-method = "psci";
+		};
+
+		CPU2: cpu@20002 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20002>;
+			enable-method = "psci";
+		};
+
+		CPU3: cpu@20003 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20003>;
+			enable-method = "psci";
+		};
+
+		CPU4: cpu@20100 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20100>;
+			enable-method = "psci";
+		};
+
+		CPU5: cpu@20101 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20101>;
+			enable-method = "psci";
+		};
+
+		CPU6: cpu@20102 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20102>;
+			enable-method = "psci";
+		};
+
+		CPU7: cpu@20103 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20103>;
+			enable-method = "psci";
+		};
+
+		CPU8: cpu@20200 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20200>;
+			enable-method = "psci";
+		};
+
+		CPU9: cpu@20201 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20201>;
+			enable-method = "psci";
+		};
+
+		CPU10: cpu@20202 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20202>;
+			enable-method = "psci";
+		};
+
+		CPU11: cpu@20203 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20203>;
+			enable-method = "psci";
+		};
+
+		CPU12: cpu@20300 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20300>;
+			enable-method = "psci";
+		};
+
+		CPU13: cpu@20301 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20301>;
+			enable-method = "psci";
+		};
+
+		CPU14: cpu@20302 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20302>;
+			enable-method = "psci";
+		};
+
+		CPU15: cpu@20303 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20303>;
+			enable-method = "psci";
+		};
+
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x00000000 0x0 0x80000000>,
+		      <0x10 0x80000000 0x1 0x80000000>;
+	};
+
+	gic: interrupt-controller@8d000000 {
+		compatible = "hisilicon,gic-v3";
+		#interrupt-cells = <3>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		status-clear-fixup;
+		interrupt-controller;
+		#redistributor-regions = <1>;
+		redistributor-stride = <0x0 0x30000>;
+		reg = <0x0 0x8d000000 0x0 0x10000>,	/* GICD */
+		      <0x0 0x8d100000 0x0 0x300000>,	/* GICR c*/
+		      <0x0 0xfe000000 0x0 0x10000>,	/* GICC */
+		      <0x0 0xfe010000 0x0 0x10000>,     /* GICH */
+		      <0x0 0xfe020000 0x0 0x10000>;     /* GICV */
+		interrupts = <1 9 0xff04>;
+
+		its_pc: interrupt-controller@8c000000 {
+			compatible = "arm,gic-v3-its";
+			msi-controller;
+			reg = <0x0 0x8c000000 0x0 0x1000000>;
+		};
+
+		its_dsa: interrupt-controller@0xc6000000 {
+			compatible = "arm,gic-v3-its";
+			msi-controller;
+			reg = <0x0 0xc6000000 0x0 0x1000000>;
+		};
+	};
+
+	smmu_pcie {
+		compatible = "arm,smmu-v3";
+		reg = <0x0 0xa0040000 0x0 0x20000>;
+		interrupt-parent  = <&mbigen_pcie>;
+		interrupts = <0x40b0c 3 39 7>,
+			     <0x40b0c 3 40 7>,
+			     <0x40b0c 3 41 7>;
+		interrupt-names = "eventq", "gerror", "priq";
+		smmu-cb-memtype = <0x0 0x1>;
+		#iommu-cells = <1>;
+		dma-coherent;
+	};
+
+	smmu_dsa {
+		compatible = "arm,smmu-v3";
+		reg = <0x0 0xc0040000 0x0 0x20000>;
+		interrupt-parent  = <&mbigen_dsa>;
+		interrupts = <0x40b20 3 78 6>,
+			     <0x40b20 3 79 6>,
+			     <0x40b20 3 80 6>;
+		interrupt-names = "eventq", "gerror", "priq";
+		smmu-cb-memtype = <0x0 0x1>;
+		#iommu-cells = <1>;
+		dma-coherent;
+	};
+
+	smmu_alg {
+		compatible = "arm,smmu-v3";
+		reg = <0x0 0xd0040000 0x0 0x20000>;
+		interrupt-parent  = <&mbigen_alg>;
+		interrupts = <0x40b1b 3 29 6>,
+			     <0x40b1b 3 30 6>,
+			     <0x40b1b 3 31 6>;
+		interrupt-names = "eventq", "gerror", "priq";
+		smmu-cb-memtype = <0x0 0x1>;
+		#iommu-cells = <1>;
+		dma-coherent;
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupts = <1 13 4>,
+			     <1 14 4>,
+			     <1 11 4>,
+			     <1 10 4>;
+	};
+
+	pmu {
+		compatible = "arm,armv8-pmuv3";
+		interrupts = <1 7 4>;
+	};
+
+	peripherals {
+		compatible = "simple-bus";
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		refclk200mhz: refclk200mhz {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <200000000>;
+		};
+
+		serial0: uart@80300000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x0 0x80300000 0x0 0x10000>;
+			interrupts = <0 317 4>;
+			clocks = <&refclk200mhz>;
+			clock-names = "apb_pclk";
+			reg-shift = <2>;
+		};
+
+		i2c0: i2c@d00e0000 {
+			compatible = "snps,designware-i2c";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0 0xd00e0000 0 0x10000>;
+			interrupt-parent = <&mbigen_alg>;
+			interrupts = <0x40B0E 1 1 6>;
+			clocks = <&refclk200mhz>;
+			clock-frequency = <100000>;
+
+			rtc0: ds3231@68 {
+				compatible = "maxim,ds3231";
+				reg = <0x68>;
+			};
+		};
+
+		mdio: mdio@803c0000 {
+			compatible = "hisilicon,hns-mdio";
+			reg = <0x0 0x803c0000 0x0 0x1000>;
+			subctrl_vbase = <&pc_sysctrl0>;
+			#address-cells = <0x1>;
+			#size-cells = <0x0>;
+
+			phy0: ethernet-phy@0 {
+				compatile = "ethernet-phy-ieee802.3-c22";
+				reg = <0>;
+				max-speed = <100>;
+			};
+
+			phy2: ethernet-phy@2 {
+				compatile = "ethernet-phy-ieee802.3-c22";
+				reg = <2>;
+				max-speed = <100>;
+			};
+		};
+
+		ppe: ppe@c5050000 {
+			compatible = "hisilicon, hip05-ppe", "syscon";
+			reg = <0 0xc5050000 0 0x30000>;
+		};
+
+		ge: ge@c7054000 {
+			compatible = "hisilicon, hip05-ge", "syscon";
+			reg = <0 0xc7054000 0 0x1000>;
+		};
+
+		gmac0: ethernet@c2080000 {
+			compatible = "hisilicon, hip05-hi1610";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0 0xc5080000 0 0x1000000>,
+			      <0 0xc0000000 0 0x1000>,
+			      <0 0xc7000000 0 0x10000>;
+			interrupt-parent  = <&mbigen_dsa>;
+			interrupts = 
+			<0x40800 409 0 5>,<0x40800 409 1 5>,
+			<0x40800 409 2 5>,<0x40800 409 3 5>,
+			<0x40800 409 4 5>,<0x40800 409 5 5>,
+			<0x40800 409 6 5>,<0x40800 409 7 5>,
+			<0x40800 409 8 5>,<0x40800 409 9 5>,
+			<0x40800 409 10 5>,<0x40800 409 11 5>,
+			<0x40800 409 12 5>, /* 13 */
+			<0x40800 409 0 7>,<0x40800 409 1 7>,
+			<0x40800 409 2 7>,<0x40800 409 3 7>,
+			<0x40800 409 4 7>,<0x40800 409 5 7>,
+			<0x40800 409 6 7>,<0x40800 409 7 7>,
+			<0x40800 409 8 7>,<0x40800 409 9 7>,
+			<0x40800 409 10 7>,<0x40800 409 11 7>, /* 12 */
+			/* index 25/26/27 ring0 tx/rx/doorbell*/
+			<0x40800 409 0 8>,<0x40800 409 1 8>,<0x40800 409 2 8>,
+			<0x40800 409 3 8>,<0x40800 409 4 8>,<0x40800 409 5 8>,
+			<0x40800 409 6 8>,<0x40800 409 7 8>,<0x40800 409 8 8>,
+			<0x40800 409 9 8>,<0x40800 409 10 8>,<0x40800 409 11 8>,
+			<0x40800 409 12 8>,<0x40800 409 13 8>,<0x40800 409 14 8>,
+			<0x40800 409 15 8>,<0x40800 409 16 8>,<0x40800 409 17 8>,
+			<0x40800 409 18 8>,<0x40800 409 19 8>,<0x40800 409 20 8>,
+			<0x40800 409 21 8>,<0x40800 409 22 8>,<0x40800 409 23 8>,
+			<0x40800 409 24 8>,<0x40800 409 25 8>,<0x40800 409 26 8>,
+			<0x40800 409 27 8>,<0x40800 409 28 8>,<0x40800 409 29 8>,
+			<0x40800 409 30 8>,<0x40800 409 31 8>,<0x40800 409 32 8>,
+			<0x40800 409 33 8>,<0x40800 409 34 8>,<0x40800 409 35 8>,
+			<0x40800 409 36 8>,<0x40800 409 37 8>,<0x40800 409 38 8>,
+			<0x40800 409 39 8>,<0x40800 409 40 8>,<0x40800 409 41 8>,
+			<0x40800 409 42 8>,<0x40800 409 43 8>,<0x40800 409 44 8>,
+			<0x40800 409 45 8>,<0x40800 409 46 8>,<0x40800 409 47 8>,
+			<0x40800 409 48 8>,<0x40800 409 49 8>,<0x40800 409 50 8>,
+			<0x40800 409 51 8>,<0x40800 409 52 8>,<0x40800 409 53 8>,
+			<0x40800 409 54 8>,<0x40800 409 55 8>,<0x40800 409 56 8>,
+			<0x40800 409 57 8>,<0x40800 409 58 8>,<0x40800 409 59 8>,
+			<0x40800 409 60 8>,<0x40800 409 61 8>,<0x40800 409 62 8>,
+			<0x40800 409 63 8>,<0x40800 409 64 8>,<0x40800 409 65 8>,
+			<0x40800 409 66 8>,<0x40800 409 67 8>,<0x40800 409 68 8>,
+			<0x40800 409 69 8>,<0x40800 409 70 8>,<0x40800 409 71 8>,
+			<0x40800 409 72 8>,<0x40800 409 73 8>,<0x40800 409 74 8>,
+			<0x40800 409 75 8>,<0x40800 409 76 8>,<0x40800 409 77 8>,
+			<0x40800 409 78 8>,<0x40800 409 79 8>,<0x40800 409 80 8>,
+			<0x40800 409 81 8>,<0x40800 409 82 8>,<0x40800 409 83 8>,
+			<0x40800 409 84 8>,<0x40800 409 85 8>,<0x40800 409 86 8>,
+			<0x40800 409 87 8>,<0x40800 409 88 8>,<0x40800 409 89 8>,
+			<0x40800 409 90 8>,<0x40800 409 91 8>,<0x40800 409 92 8>,
+			<0x40800 409 93 8>,<0x40800 409 94 8>,<0x40800 409 95 8>,
+			<0x40800 409 96 8>,<0x40800 409 97 8>,<0x40800 409 98 8>,
+			<0x40800 409 99 8>,<0x40800 409 100 8>,<0x40800 409 101 8>,
+			<0x40800 409 102 8>,<0x40800 409 103 8>,<0x40800 409 104 8>,
+			<0x40800 409 105 8>,<0x40800 409 106 8>,<0x40800 409 107 8>,
+			<0x40800 409 108 8>,<0x40800 409 109 8>,<0x40800 409 110 8>,
+			<0x40800 409 111 8>,<0x40800 409 112 8>,<0x40800 409 113 8>,
+			<0x40800 409 114 8>,<0x40800 409 115 8>,<0x40800 409 116 8>,
+			<0x40800 409 117 8>,<0x40800 409 118 8>,<0x40800 409 119 8>,
+			<0x40800 409 120 8>,<0x40800 409 121 8>,<0x40800 409 122 8>,
+			<0x40800 409 123 8>,<0x40800 409 124 8>,<0x40800 409 125 8>,
+			<0x40800 409 126 8>,<0x40800 409 127 8>, /* 128 */
+			<0x40800 409 0 9>, 
+			<0x40800 409 1 9>,<0x40800 409 2 9>,<0x40800 409 3 9>,
+			<0x40800 409 4 9>,<0x40800 409 5 9>,<0x40800 409 6 9>,
+			<0x40800 409 7 9>,<0x40800 409 8 9>,<0x40800 409 9 9>,
+			<0x40800 409 10 9>,<0x40800 409 11 9>,<0x40800 409 12 9>,
+			<0x40800 409 13 9>,<0x40800 409 14 9>,<0x40800 409 15 9>,
+			<0x40800 409 16 9>,<0x40800 409 17 9>,<0x40800 409 18 9>,
+			<0x40800 409 19 9>,<0x40800 409 20 9>,<0x40800 409 21 9>,
+			<0x40800 409 22 9>,<0x40800 409 23 9>,<0x40800 409 24 9>,
+			<0x40800 409 25 9>,<0x40800 409 26 9>,<0x40800 409 27 9>,
+			<0x40800 409 28 9>,<0x40800 409 29 9>,<0x40800 409 30 9>,
+			<0x40800 409 31 9>,<0x40800 409 32 9>,<0x40800 409 33 9>,
+			<0x40800 409 34 9>,<0x40800 409 35 9>,<0x40800 409 36 9>,
+			<0x40800 409 37 9>,<0x40800 409 38 9>,<0x40800 409 39 9>,
+			<0x40800 409 40 9>,<0x40800 409 41 9>,<0x40800 409 42 9>,
+			<0x40800 409 43 9>,<0x40800 409 44 9>,<0x40800 409 45 9>,
+			<0x40800 409 46 9>,<0x40800 409 47 9>,<0x40800 409 48 9>,
+			<0x40800 409 49 9>,<0x40800 409 50 9>,<0x40800 409 51 9>,
+			<0x40800 409 52 9>,<0x40800 409 53 9>,<0x40800 409 54 9>,
+			<0x40800 409 55 9>,<0x40800 409 56 9>,<0x40800 409 57 9>,
+			<0x40800 409 58 9>,<0x40800 409 59 9>,<0x40800 409 60 9>,
+			<0x40800 409 61 9>,<0x40800 409 62 9>,<0x40800 409 63 9>,
+			<0x40800 409 64 9>,<0x40800 409 65 9>,<0x40800 409 66 9>,
+			<0x40800 409 67 9>,<0x40800 409 68 9>,<0x40800 409 69 9>,
+			<0x40800 409 70 9>,<0x40800 409 71 9>,<0x40800 409 72 9>,
+			<0x40800 409 73 9>,<0x40800 409 74 9>,<0x40800 409 75 9>,
+			<0x40800 409 76 9>,<0x40800 409 77 9>,<0x40800 409 78 9>,
+			<0x40800 409 79 9>,<0x40800 409 80 9>,<0x40800 409 81 9>,
+			<0x40800 409 82 9>,<0x40800 409 83 9>,<0x40800 409 84 9>,
+			<0x40800 409 85 9>,<0x40800 409 86 9>,<0x40800 409 87 9>,
+			<0x40800 409 88 9>,<0x40800 409 89 9>,<0x40800 409 90 9>,
+			<0x40800 409 91 9>,<0x40800 409 92 9>,<0x40800 409 93 9>,
+			<0x40800 409 94 9>,<0x40800 409 95 9>,<0x40800 409 96 9>,
+			<0x40800 409 97 9>,<0x40800 409 98 9>,<0x40800 409 99 9>,
+			<0x40800 409 100 9>,<0x40800 409 101 9>,<0x40800 409 102 9>,
+			<0x40800 409 103 9>,<0x40800 409 104 9>,<0x40800 409 105 9>,
+			<0x40800 409 106 9>,<0x40800 409 107 9>,<0x40800 409 108 9>,
+			<0x40800 409 109 9>,<0x40800 409 110 9>,<0x40800 409 111 9>,
+			<0x40800 409 112 9>,<0x40800 409 113 9>,<0x40800 409 114 9>,
+			<0x40800 409 115 9>,<0x40800 409 116 9>,<0x40800 409 117 9>,
+			<0x40800 409 118 9>,<0x40800 409 119 9>,<0x40800 409 120 9>,
+			<0x40800 409 121 9>,<0x40800 409 122 9>,<0x40800 409 123 9>,
+			<0x40800 409 124 9>,<0x40800 409 125 9>,<0x40800 409 126 9>,
+			<0x40800 409 127 9>,<0x40800 409 0 10>,<0x40800 409 1 10>,
+			<0x40800 409 2 10>,<0x40800 409 3 10>,<0x40800 409 4 10>,
+			<0x40800 409 5 10>,<0x40800 409 6 10>,<0x40800 409 7 10>,
+			<0x40800 409 8 10>,<0x40800 409 9 10>,<0x40800 409 10 10>,
+			<0x40800 409 11 10>,<0x40800 409 12 10>,<0x40800 409 13 10>,
+			<0x40800 409 14 10>,<0x40800 409 15 10>,<0x40800 409 16 10>,
+			<0x40800 409 17 10>,<0x40800 409 18 10>,<0x40800 409 19 10>,
+			<0x40800 409 20 10>,<0x40800 409 21 10>,<0x40800 409 22 10>,
+			<0x40800 409 23 10>,<0x40800 409 24 10>,<0x40800 409 25 10>,
+			<0x40800 409 26 10>,<0x40800 409 27 10>,<0x40800 409 28 10>,
+			<0x40800 409 29 10>,<0x40800 409 30 10>,<0x40800 409 31 10>,
+			<0x40800 409 32 10>,<0x40800 409 33 10>,<0x40800 409 34 10>,
+			<0x40800 409 35 10>,<0x40800 409 36 10>,<0x40800 409 37 10>,
+			<0x40800 409 38 10>,<0x40800 409 39 10>,<0x40800 409 40 10>,
+			<0x40800 409 41 10>,<0x40800 409 42 10>,<0x40800 409 43 10>,
+			<0x40800 409 44 10>,<0x40800 409 45 10>,<0x40800 409 46 10>,
+			<0x40800 409 47 10>,<0x40800 409 48 10>,<0x40800 409 49 10>,
+			<0x40800 409 50 10>,<0x40800 409 51 10>,<0x40800 409 52 10>,
+			<0x40800 409 53 10>,<0x40800 409 54 10>,<0x40800 409 55 10>,
+			<0x40800 409 56 10>,<0x40800 409 57 10>,<0x40800 409 58 10>,
+			<0x40800 409 59 10>,<0x40800 409 60 10>,<0x40800 409 61 10>,
+			<0x40800 409 62 10>,<0x40800 409 63 10>,<0x40800 409 64 10>,
+			<0x40800 409 65 10>,<0x40800 409 66 10>,<0x40800 409 67 10>,
+			<0x40800 409 68 10>,<0x40800 409 69 10>,<0x40800 409 70 10>,
+			<0x40800 409 71 10>,<0x40800 409 72 10>,<0x40800 409 73 10>,
+			<0x40800 409 74 10>,<0x40800 409 75 10>,<0x40800 409 76 10>,
+			<0x40800 409 77 10>,<0x40800 409 78 10>,<0x40800 409 79 10>,
+			<0x40800 409 80 10>,<0x40800 409 81 10>,<0x40800 409 82 10>,
+			<0x40800 409 83 10>,<0x40800 409 84 10>,<0x40800 409 85 10>,
+			<0x40800 409 86 10>,<0x40800 409 87 10>,<0x40800 409 88 10>,
+			<0x40800 409 89 10>,<0x40800 409 90 10>,<0x40800 409 91 10>,
+			<0x40800 409 92 10>,<0x40800 409 93 10>,<0x40800 409 94 10>,
+			<0x40800 409 95 10>,<0x40800 409 96 10>,<0x40800 409 97 10>,
+			<0x40800 409 98 10>,<0x40800 409 99 10>,<0x40800 409 100 10>,
+			<0x40800 409 101 10>,<0x40800 409 102 10>,<0x40800 409 103 10>,
+			<0x40800 409 104 10>,<0x40800 409 105 10>,<0x40800 409 106 10>,
+			<0x40800 409 107 10>,<0x40800 409 108 10>,<0x40800 409 109 10>,
+			<0x40800 409 110 10>,<0x40800 409 111 10>,<0x40800 409 112 10>,
+			<0x40800 409 113 10>,<0x40800 409 114 10>,<0x40800 409 115 10>,
+			<0x40800 409 116 10>,<0x40800 409 117 10>,<0x40800 409 118 10>,
+			<0x40800 409 119 10>,<0x40800 409 120 10>,<0x40800 409 121 10>,
+			<0x40800 409 122 10>,<0x40800 409 123 10>,<0x40800 409 124 10>,
+			<0x40800 409 125 10>,<0x40800 409 126 10>,<0x40800 409 127 10>;
+
+			phy-mode = "sgmii";
+			mac-address = [11 11 11 11 11 11];
+			port-id = <5>;
+			ring-num = <80>;
+			chip-id = <1>;
+			phy-handle = <&phy2>;
+			ppe-handle = <&ppe 1>;
+			ge-handle = <&ge 10 1>;
+			dma-coherent;
+		};
+
+		mbigen_pc: interrupt-controller@8c030000 {
+			compatible = "hisilicon,mbi-gen";
+			msi-parent = <&its_pc>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			reg = <0x0 0x8c030000 0x0 0x10000>;
+		};
+
+		mbigen_dsa: interrupt-controller@c0080000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa>;
+			interrupt-controller;
+			#interrupt-cells = <4>;
+			reg = <0x0 0xc0080000 0x0 0x10000>;
+		};
+
+		mbigen_pcie: interrupt-controller@a0080000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa>;
+			interrupt-controller;
+			#interrupt-cells = <4>;
+			reg = <0x0 0xa0080000 0x0 0x10000>;
+		};
+
+		mbigen_alg: interrupt-controller@d0080000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa>;
+			interrupt-controller;
+			#interrupt-cells = <4>;
+			reg = <0x0 0xd0080000 0x0 0x10000>;
+		};
+
+		pc_sysctrl0: system-controller@80010000 {
+			compatible = "hisilicon,hip05-sysctrl", "syscon";
+			reg = <0x0 0x80010000 0x0 0x10000>;
+		};
+
+		djtag0: djtag@0 {
+			compatible = "hisilicon,hip05-djtag";
+			syscon = <&pc_sysctrl0>;
+		};
+
+		llc0: llc@0 {
+			compatible = "hisilicon,hip05-llc";
+			djtag = <&djtag0 2>;
+		};
+	};
+
+	chosen {
+		/* bootargs = "rdinit=/init console=ttyS0,115200 earlycon=uart8250,mmio32,0x80300000" ; */
+                bootargs = "rdinit=/sbin/init console=ttyS0,115200 earlycon=uart8250,mmio32,0x80300000 pci=pcie_bus_perf vos_reserve_size=128M pbs_size=128M log_nvram_redirect=on os_boot_osp";
+		linux,initrd-start = <0x7000000>;
+		linux,initrd-end = <0x40000000>;
+	};
+};

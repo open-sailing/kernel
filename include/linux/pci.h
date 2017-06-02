@@ -1514,6 +1514,8 @@ static inline void pci_resource_to_user(const struct pci_dev *dev, int bar,
 }
 #endif /* HAVE_ARCH_PCI_RESOURCE_TO_USER */
 
+typedef void (*fix_hisi_fn)(struct pci_dev *dev);
+extern fix_hisi_fn fix_hisi_hp_device;
 
 /*
  *  The world is not perfect and supplies us with broken PCI devices.
@@ -1653,6 +1655,7 @@ extern u8 pci_cache_line_size;
 
 extern unsigned long pci_hotplug_io_size;
 extern unsigned long pci_hotplug_mem_size;
+extern unsigned long pci_hotplug_bus_size;
 
 /* Architecture-specific versions may override these (weak) */
 void pcibios_disable_device(struct pci_dev *dev);
@@ -1662,6 +1665,7 @@ int pcibios_set_pcie_reset_state(struct pci_dev *dev,
 int pcibios_add_device(struct pci_dev *dev);
 void pcibios_release_device(struct pci_dev *dev);
 void pcibios_penalize_isa_irq(int irq, int active);
+int pcibios_check_service_irqs(struct pci_dev *dev, int *irqs, int mask);
 
 #ifdef CONFIG_HIBERNATE_CALLBACKS
 extern struct dev_pm_ops pcibios_pm_ops;
@@ -1761,6 +1765,20 @@ static inline u16 pcie_caps_reg(const struct pci_dev *dev)
 static inline int pci_pcie_type(const struct pci_dev *dev)
 {
 	return (pcie_caps_reg(dev) & PCI_EXP_FLAGS_TYPE) >> 4;
+}
+
+static inline struct pci_dev *pcie_find_root_port(struct pci_dev *dev)
+{
+	while (1) {
+		if (!pci_is_pcie(dev))
+			break;
+		if (pci_pcie_type(dev) == PCI_EXP_TYPE_ROOT_PORT)
+			return dev;
+		if (!dev->bus->self)
+			break;
+		dev = dev->bus->self;
+	}
+	return NULL;
 }
 
 void pci_request_acs(void);

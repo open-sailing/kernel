@@ -74,6 +74,7 @@
 #include <trace/events/libata.h>
 
 #include "libata.h"
+#include "ahci.h"
 #include "libata-transport.h"
 
 /* debounce timing parameters in msecs { interval, duration, timeout } */
@@ -1692,6 +1693,8 @@ unsigned ata_exec_internal_sg(struct ata_device *dev,
 
 		if (qc->err_mask & ~AC_ERR_OTHER)
 			qc->err_mask &= ~AC_ERR_OTHER;
+	} else if (qc->tf.command == ATA_CMD_REQ_SENSE_DATA) {
+		qc->result_tf.command |= ATA_SENSE;
 	}
 
 	/* finish up */
@@ -3803,6 +3806,12 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
 	if ((rc = sata_scr_write_flush(link, SCR_CONTROL, scontrol)))
 		goto out;
 
+	if (!memcmp("ahci_p660", link->ap->dev->driver->name, 9)) {
+		struct ahci_host_priv *hpriv = link->ap->host->private_data;
+		if (hpriv && hpriv->restart_port_phy)
+			hpriv->restart_port_phy(link->ap);
+	}
+
 	/* Couldn't find anything in SATA I/II specs, but AHCI-1.1
 	 * 10.4.2 says at least 1 ms.
 	 */
@@ -4139,10 +4148,10 @@ static const struct ata_blacklist_entry ata_device_blacklist [] = {
 	{ "ST380013AS",		"3.20",		ATA_HORKAGE_MAX_SEC_1024 },
 
 	/*
-	 * Device times out with higher max sects.
+	 * These devices time out with higher max sects.
 	 * https://bugzilla.kernel.org/show_bug.cgi?id=121671
 	 */
-	{ "LITEON CX1-JB256-HP", NULL,		ATA_HORKAGE_MAX_SEC_1024 },
+	{ "LITEON CX1-JB*-HP",	NULL,		ATA_HORKAGE_MAX_SEC_1024 },
 
 	/* Devices we expect to fail diagnostics */
 

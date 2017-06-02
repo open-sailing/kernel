@@ -1,0 +1,277 @@
+
+		Guideline For Submitting Patches To Euler Kernel
+
+
+Author:		zhangwei(Jovi) <jovi.zhangwei@huawei.com>
+Reviewed-by: 	Li Zefan <lizefan@huawei.com>
+Date:		2013.6.3
+
+Update:		2017.03.29 by Xie XiuQi <xiexiuqi@huawei.com>
+
+===========================
+Steps of submitting patches
+===========================
+1. Compile
+   Make sure your changes can pass compile successfully in hulk.
+   When backporting a patch from distribution or mainline, it's necessary
+   to verify the patch can be applied and pass compile in hulk.
+
+2. Test
+   Test the patch in local Linux machine, and make sure the code that the
+   patch touch can be covered if at all possible.
+
+3. Generate patches
+   Use git-format-patch to generate patches, and if it's a patchset, it's
+   better to use --cover-letter option to describe what the patchset does.
+
+   Using scripts/checkpatch.pl to make sure there's no coding style issue.
+
+   And make sure your patch follow unified euler patch format describe
+   below.
+
+4. Send patch to hulk mailing list
+   Use below command to send patches to euler mailing list
+
+   git send-email *.patch -to "maintainer email" --cc="kernel.openeuler@huawei.com" \
+   --from="your email" --suppress-cc=all
+
+   *NOTE*: that you must add --suppress-cc=all if you use git send-email,
+   otherwise the email will be cced to the people outside and public mailing
+   lists.
+
+
+========================
+Use unified patch format
+========================
+Reasons:
+
+1) long term maintainability
+   hulk will merge massive patches, from rt, stable, vender, mainline,
+   rtos/serveros, etc. If all patches are merged by casual changelog format
+   without a unified format, the git log will be messy, and then it's hard to
+   figure out if a patch is a stable backport or an rt fix for example, and
+   this will degrade the quality of our kernel from patch management point of
+   view.
+
+2) kernel upgrade
+   we definitely will upgrade our hulk in someday, using strict patch
+   management will alleviate the pain to migrate patches during big upgrade.
+
+3) easy for script parsing
+   keyword highlighting is necessary for script parsing, and git log --grep="xxx".
+
+
+=======================
+Patch format definition
+=======================
+[M] stands for "mandatory"
+[O] stands for "option"
+$category can be: bug preparation, bugfix, perf, feature, doc, other...
+
+If category is feature, then we also need to add feature name like below:
+	category: feature
+	feature: YYY (the feature name)
+
+If the patch is related to DTS, AR or bugzilla, then we need add the corresponding
+tag like below (In general, it should include at least one of the following):
+	AR: $ar-id
+	DTS: $dts-id
+	CVE: $cve-id
+	bugzilla: $bug-id
+
+Additional changelog should include at least one of the flollwing:
+	1) Why we should apply this patch
+	2) What real problem in product does this patch resolved
+	3) How could we reproduce this bug or how to test
+	4) Other useful information for help to understand this patch or problem
+
+The detail information is very useful for porting patch to another kenrel branch.
+
+1. stable patch
+	stable inclusion	[M]
+	from $stable-version	[M]
+	commit $id		[M]
+	category: $category	[M]
+
+	additional changelog	[O]
+
+	--------------------------------
+
+	original changelog
+
+	Signed-off-by: $author <$name@huawei.com>	[M]
+
+	($stable-version would be stable-3.4.40, stable-3.4.41, etc...
+	 $id would be stable commit)
+
+2. mainline patch
+	mainline inclusion	[M]
+	from $mainline-version	[M]
+	commit $id		[M]
+	category: $category	[M]
+
+	additional changelog	[O]
+
+	--------------------------------
+
+	original changelog
+
+	Signed-off-by: $author <$name@huawei.com>	[M]
+
+	($mainline-version could be mainline-3.5, mainline-3.6, etc...)
+
+3. distribution patch
+	dist inclusion		[M]
+	from $dist-version	[M]
+	upstream commit $id	[O]
+	category: $category	[M]
+
+	additional changelog	[O]
+
+	--------------------------------
+
+	original changelog
+
+	Signed-off-by: $author <$name@huawei.com>	[M]
+
+	($dist-version could be windriver 4.3, suse 11 sp2, etc...)
+
+4. rt patch
+	rt inclusion		[M]
+	from $rt-version	[M]
+	category: $category	[M]
+
+	additional changelog	[O]
+
+	--------------------------------
+
+	original changelog
+
+	Signed-off-by: $author <$name@huawei.com>	[M]
+
+	($rt-version would be rt-3.6, rt-3.10 etc...)
+
+5. euleros patch
+	euleros inclusion	[M]
+	category: $category	[M]
+
+	changelog
+
+	Signed-off-by: $author <$name@huawei.com>	[M]
+
+6. hulk patch
+	hulk inclusion		[M]
+	category: $category	[M]
+
+	changelog
+
+	Signed-off-by: $author <$name@huawei.com>	[M]
+
+7. combinations inclusion patch
+   There have two type combination inclusion patch: dist/rt and euler/rt.
+
+7a. dist/rt patch (rt patch from distribution, like windriver)
+	dist/rt inclusion	[M]
+	from $dist-version	[M]
+	category: $category	[M]
+
+	additional changelog	[O]
+
+	--------------------------------
+
+	original changelog
+
+	Signed-off-by: $author <$name@huawei.com>	[M]
+
+7b. hulk/rt patch (rt patch commit by hulk)
+	hulk/rt inclusion	[M]
+	category: $category	[M]
+
+	changelog
+
+	Signed-off-by: $author <$name@huawei.com>	[M]
+
+========
+Examples
+========
+
+mainline inclusion
+from mainline-4.10
+commit 0becc0ae5b42828785b589f686725ff5bc3b9b25
+category: bugfix
+bugzilla: 3004
+DTS: DTS2017032901387
+CVE: NA
+
+The patch fixes a BUG_ON in the product: injecting single bit ECC error to memory
+before system boot use hardware inject tools, which cause a large amount of
+CMCI during system booting .
+
+[    1.140358] mce: [Hardware Error]: Machine check events logged
+[    1.146580] mce: [Hardware Error]: Machine check events logged
+[    1.152908] ------------[ cut here ]------------
+[    1.157751] kernel BUG at kernel/timer.c:951!
+[    1.162321] invalid opcode: 0000 [#1] SMP
+[    1.231074] Modules linked in:
+[    1.234448] CPU: 0 PID: 0 Comm: swapper/0 Not tainted 3.10.0-327.28.56.5.x86_64 #1
+[    1.242388] Hardware name: Insyde Purley/STL2TSPCI, BIOS 01.01T08 01/14/2017
+[    1.249638] task: ffffffff81c15460 ti: ffffffff81c00000 task.ti: ffffffff81c00000
+[    1.257451] RIP: 0010:[<ffffffff8108f8fa>]  [<ffffffff8108f8fa>] add_timer_on+0xda/0xf0
+[    1.265890]  [<ffffffff8108f8fa>] add_timer_on+0xda/0xf0
+...
+
+-------------------------------------------------
+
+original changelog
+
+<original S-O-B>
+Signed-off-by: Xie XiuQi <xiexiuqi@huawei.com>
+Tested-by: Mu Suanming (00404162) <mousuanming@huawei.com>
+
+============
+Useful tools
+============
+
+There is a useful script to save typing keyboard if you have lots of
+patches to backport, or you're a maintainer.
+
+You can get the script from:
+http://code.huawei.com/hulk/euleros-kernel-tools/blob/master/pick
+
+A example to generate a changelog for patch backport:
+
+$ ./pick -b 1234 -D DTS1234567890 -C CVE-2017-1234 -c 0becc0ae5b42828785b589f686725ff5bc3b9b25
+x86/mce: Make timer handling more robust
+
+mainline inclusion
+from mainline-4.10
+commit 0becc0ae5b42828785b589f686725ff5bc3b9b25
+category: bugfix
+bugzilla: 1234
+DTS: NA
+CVE: CVE-2017-1234
+
+-------------------------------------------------
+
+Erik reported that on a preproduction hardware a CMCI storm triggers the
+BUG_ON in add_timer_on(). The reason is that the per CPU MCE timer is
+started by the CMCI logic before the MCE CPU hotplug callback starts the
+timer with add_timer_on(). So the timer is already queued which triggers
+the BUG.
+
+Using add_timer_on() is pretty pointless in this code because the timer is
+strictlty per CPU, initialized as pinned and all operations which arm the
+timer happen on the CPU to which the timer belongs.
+
+Simplify the whole machinery by using mod_timer() instead of add_timer_on()
+which avoids the problem because mod_timer() can handle already queued
+timers. Use __start_timer() everywhere so the earliest armed expiry time is
+preserved.
+
+Reported-by: Erik Veijola <erik.veijola@intel.com>
+Tested-by: Borislav Petkov <bp@alien8.de>
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>
+Reviewed-by: Borislav Petkov <bp@alien8.de>
+Cc: Tony Luck <tony.luck@intel.com>
+Link: http://lkml.kernel.org/r/alpine.DEB.2.20.1701310936080.3457@nanos
+Signed-off-by: Thomas Gleixner <tglx@linutronix.de>

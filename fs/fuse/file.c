@@ -1477,9 +1477,9 @@ static void fuse_writepage_finish(struct fuse_conn *fc, struct fuse_req *req)
 
 	list_del(&req->writepages_entry);
 	for (i = 0; i < req->num_pages; i++) {
-		dec_bdi_stat(bdi, BDI_WRITEBACK);
+		dec_wb_stat(&bdi->wb, WB_WRITEBACK);
 		dec_zone_page_state(req->pages[i], NR_WRITEBACK_TEMP);
-		bdi_writeout_inc(bdi);
+		wb_writeout_inc(&bdi->wb);
 	}
 	wake_up(&fi->page_waitq);
 }
@@ -1666,7 +1666,7 @@ static int fuse_writepage_locked(struct page *page)
 	req->end = fuse_writepage_end;
 	req->inode = inode;
 
-	inc_bdi_stat(inode_to_bdi(inode), BDI_WRITEBACK);
+	inc_wb_stat(&inode_to_bdi(inode)->wb, WB_WRITEBACK);
 	inc_zone_page_state(tmp_page, NR_WRITEBACK_TEMP);
 
 	spin_lock(&fc->lock);
@@ -1781,9 +1781,9 @@ static bool fuse_writepage_in_flight(struct fuse_req *new_req,
 		copy_highpage(old_req->pages[0], page);
 		spin_unlock(&fc->lock);
 
-		dec_bdi_stat(bdi, BDI_WRITEBACK);
+		dec_wb_stat(&bdi->wb, WB_WRITEBACK);
 		dec_zone_page_state(page, NR_WRITEBACK_TEMP);
-		bdi_writeout_inc(bdi);
+		wb_writeout_inc(&bdi->wb);
 		fuse_writepage_free(fc, new_req);
 		fuse_request_free(new_req);
 		goto out;
@@ -1880,7 +1880,7 @@ static int fuse_writepages_fill(struct page *page,
 	req->page_descs[req->num_pages].offset = 0;
 	req->page_descs[req->num_pages].length = PAGE_SIZE;
 
-	inc_bdi_stat(inode_to_bdi(inode), BDI_WRITEBACK);
+	inc_wb_stat(&inode_to_bdi(inode)->wb, WB_WRITEBACK);
 	inc_zone_page_state(tmp_page, NR_WRITEBACK_TEMP);
 
 	err = 0;
@@ -1997,6 +1997,10 @@ static int fuse_write_end(struct file *file, struct address_space *mapping,
 {
 	struct inode *inode = page->mapping->host;
 
+	/* Haven't copied anything?  Skip zeroing, size extending, dirtying. */
+	if (!copied)
+		goto unlock;
+
 	if (!PageUptodate(page)) {
 		/* Zero any unwritten bytes at the end of the page */
 		size_t endoff = (pos + copied) & ~PAGE_CACHE_MASK;
@@ -2007,6 +2011,8 @@ static int fuse_write_end(struct file *file, struct address_space *mapping,
 
 	fuse_write_update_size(inode, pos + copied);
 	set_page_dirty(page);
+
+unlock:
 	unlock_page(page);
 	page_cache_release(page);
 
@@ -2797,7 +2803,7 @@ static void fuse_do_truncate(struct file *file)
 	attr.ia_file = file;
 	attr.ia_valid |= ATTR_FILE;
 
-	fuse_do_setattr(inode, &attr, file);
+	fuse_do_setattr(file->f_path.dentry, &attr, file);
 }
 
 static inline loff_t fuse_round_up(loff_t off)

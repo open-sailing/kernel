@@ -1,0 +1,16 @@
+Hisilicon Hip05 Soc NAND controller DT binding
+
+Required properties:
+
+- compatible:          Should be "hisilicon,hip05-nfc".
+- reg:                 The first contains base physical address and size of
+                       NAND controller's registers. The second contains base
+                       physical address and size of NAND controller's buffer.
+
+
+Example:
+
+	nand: nand@68010000 {
+		compatible = "hisilicon,hip05-nfc";
+		reg = <0x0 0x68010000 0x0 0x10000>, <0x0 0x68020000 0x0 0x10000>;
+	};

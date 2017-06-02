@@ -583,7 +583,8 @@ wakeup_secondary_cpu_via_init(int phys_apicid, unsigned long start_eip)
 	pr_debug("Waiting for send to finish...\n");
 	send_status = safe_apic_wait_icr_idle();
 
-	mdelay(10);
+	if (!microvm)
+		mdelay(10);
 
 	pr_debug("Deasserting INIT\n");
 
@@ -1052,6 +1053,19 @@ static int __init smp_sanity_check(unsigned max_cpus)
 		nr_cpu_ids = 8;
 	}
 #endif
+
+	if (microvm) {
+		unsigned int cpu;
+		unsigned nr = 0;
+
+		for_each_possible_cpu(cpu) {
+			set_cpu_present(cpu, true);
+			nr++;
+		}
+		nr_cpu_ids = nr;
+		preempt_enable();
+		return SMP_OK;
+	}
 
 	if (!physid_isset(hard_smp_processor_id(), phys_cpu_present_map)) {
 		pr_warn("weird, boot CPU (#%d) not listed by the BIOS\n",

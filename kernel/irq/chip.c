@@ -90,6 +90,45 @@ int irq_set_handler_data(unsigned int irq, void *data)
 EXPORT_SYMBOL(irq_set_handler_data);
 
 /**
+ *	irq_set_mbi_desc - set MBI descriptor for an irq
+ *	@irq:	Interrupt number
+ *	@entry:	Pointer to MBI descriptor
+ */
+int irq_set_mbi_desc(unsigned int irq, struct mbi_desc *entry)
+{
+	unsigned long flags;
+	struct irq_desc *desc = irq_get_desc_lock(irq, &flags, IRQ_GET_DESC_CHECK_GLOBAL);
+
+	if (!desc)
+		return -EINVAL;
+	desc->irq_data.mbi_desc = entry;
+	irq_put_desc_unlock(desc, flags);
+	return 0;
+}
+EXPORT_SYMBOL(irq_set_mbi_desc);
+
+/**
+ *	irq_set_mbi_desc_range - set MBI descriptor for a range of irqs
+ *	@irq:	Interrupt number
+ *	@entry:	Pointer to MBI descriptor
+ *	@count:	Number of interrupts to be set
+ */
+int irq_set_mbi_desc_range(unsigned int irq, struct mbi_desc *entry,
+			   unsigned int count)
+{
+	int i, ret = 0;
+
+	for (i = 0; i < count; i++) {
+		ret = irq_set_mbi_desc(irq + i, entry);
+		if (ret)
+			break;
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL(irq_set_mbi_desc_range);
+
+/**
  *	irq_set_msi_desc_off - set MSI descriptor data for an irq at offset
  *	@irq_base:	Interrupt number base
  *	@irq_offset:	Interrupt number offset
@@ -151,6 +190,33 @@ struct irq_data *irq_get_irq_data(unsigned int irq)
 	return desc ? &desc->irq_data : NULL;
 }
 EXPORT_SYMBOL_GPL(irq_get_irq_data);
+
+/**
+ * irq_compose_mbi_msg - Compose mbi message for an irq chip
+ * @data:	Pointer to interrupt specific data
+ * @msg:	Pointer to the MBI message
+ *
+ * For hierarchical domains we find the first chip in the hierarchy
+ * which implements the irq_compose_msg callback. For non hierarchical
+ * we use the top level chip.
+ */
+int irq_compose_mbi_msg(struct irq_data *data, struct mbi_msg *msg)
+{
+	struct irq_data *pos = NULL;
+
+#ifdef	CONFIG_IRQ_DOMAIN_HIERARCHY
+	for (; data; data = data->parent_data)
+#endif
+		if (data->chip && data->chip->irq_compose_msg)
+			pos = data;
+	if (!pos)
+		return -ENOSYS;
+
+	pos->chip->irq_compose_msg(pos, msg);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(irq_compose_mbi_msg);
 
 static void irq_state_clr_disabled(struct irq_desc *desc)
 {
@@ -227,6 +293,13 @@ void irq_enable(struct irq_desc *desc)
  * disabled. If an interrupt happens, then the interrupt flow
  * handler masks the line at the hardware level and marks it
  * pending.
+ *
+ * If the interrupt chip does not implement the irq_disable callback,
+ * a driver can disable the lazy approach for a particular irq line by
+ * calling 'irq_set_status_flags(irq, IRQ_DISABLE_UNLAZY)'. This can
+ * be used for devices which cannot disable the interrupt at the
+ * device level under certain circumstances and have to use
+ * disable_irq[_nosync] instead.
  */
 void irq_disable(struct irq_desc *desc)
 {
@@ -234,6 +307,8 @@ void irq_disable(struct irq_desc *desc)
 	if (desc->irq_data.chip->irq_disable) {
 		desc->irq_data.chip->irq_disable(&desc->irq_data);
 		irq_state_set_masked(desc);
+	} else if (irq_settings_disable_unlazy(desc)) {
+		mask_irq(desc);
 	}
 }
 
@@ -315,7 +390,6 @@ void handle_nested_irq(unsigned int irq)
 	raw_spin_lock_irq(&desc->lock);
 
 	desc->istate &= ~(IRQS_REPLAY | IRQS_WAITING);
-	kstat_incr_irqs_this_cpu(irq, desc);
 
 	action = desc->action;
 	if (unlikely(!action || irqd_irq_disabled(&desc->irq_data))) {
@@ -323,6 +397,7 @@ void handle_nested_irq(unsigned int irq)
 		goto out_unlock;
 	}
 
+	kstat_incr_irqs_this_cpu(desc);
 	irqd_set(&desc->irq_data, IRQD_IRQ_INPROGRESS);
 	raw_spin_unlock_irq(&desc->lock);
 
@@ -391,13 +466,13 @@ handle_simple_irq(unsigned int irq, struct irq_desc *desc)
 		goto out_unlock;
 
 	desc->istate &= ~(IRQS_REPLAY | IRQS_WAITING);
-	kstat_incr_irqs_this_cpu(irq, desc);
 
 	if (unlikely(!desc->action || irqd_irq_disabled(&desc->irq_data))) {
 		desc->istate |= IRQS_PENDING;
 		goto out_unlock;
 	}
 
+	kstat_incr_irqs_this_cpu(desc);
 	handle_irq_event(desc);
 
 out_unlock:
@@ -443,7 +518,6 @@ handle_level_irq(unsigned int irq, struct irq_desc *desc)
 		goto out_unlock;
 
 	desc->istate &= ~(IRQS_REPLAY | IRQS_WAITING);
-	kstat_incr_irqs_this_cpu(irq, desc);
 
 	/*
 	 * If its disabled or no action available
@@ -454,6 +528,7 @@ handle_level_irq(unsigned int irq, struct irq_desc *desc)
 		goto out_unlock;
 	}
 
+	kstat_incr_irqs_this_cpu(desc);
 	handle_irq_event(desc);
 
 	cond_unmask_irq(desc);
@@ -515,7 +590,6 @@ handle_fasteoi_irq(unsigned int irq, struct irq_desc *desc)
 		goto out;
 
 	desc->istate &= ~(IRQS_REPLAY | IRQS_WAITING);
-	kstat_incr_irqs_this_cpu(irq, desc);
 
 	/*
 	 * If its disabled or no action available
@@ -527,6 +601,7 @@ handle_fasteoi_irq(unsigned int irq, struct irq_desc *desc)
 		goto out;
 	}
 
+	kstat_incr_irqs_this_cpu(desc);
 	if (desc->istate & IRQS_ONESHOT)
 		mask_irq(desc);
 
@@ -583,7 +658,7 @@ handle_edge_irq(unsigned int irq, struct irq_desc *desc)
 		goto out_unlock;
 	}
 
-	kstat_incr_irqs_this_cpu(irq, desc);
+	kstat_incr_irqs_this_cpu(desc);
 
 	/* Start handling the irq */
 	desc->irq_data.chip->irq_ack(&desc->irq_data);
@@ -646,7 +721,7 @@ void handle_edge_eoi_irq(unsigned int irq, struct irq_desc *desc)
 		goto out_eoi;
 	}
 
-	kstat_incr_irqs_this_cpu(irq, desc);
+	kstat_incr_irqs_this_cpu(desc);
 
 	do {
 		if (unlikely(!desc->action))
@@ -675,7 +750,7 @@ handle_percpu_irq(unsigned int irq, struct irq_desc *desc)
 {
 	struct irq_chip *chip = irq_desc_get_chip(desc);
 
-	kstat_incr_irqs_this_cpu(irq, desc);
+	kstat_incr_irqs_this_cpu(desc);
 
 	if (chip->irq_ack)
 		chip->irq_ack(&desc->irq_data);
@@ -702,17 +777,27 @@ void handle_percpu_devid_irq(unsigned int irq, struct irq_desc *desc)
 {
 	struct irq_chip *chip = irq_desc_get_chip(desc);
 	struct irqaction *action = desc->action;
-	void *dev_id = raw_cpu_ptr(action->percpu_dev_id);
 	irqreturn_t res;
 
-	kstat_incr_irqs_this_cpu(irq, desc);
+	kstat_incr_irqs_this_cpu(desc);
 
 	if (chip->irq_ack)
 		chip->irq_ack(&desc->irq_data);
 
-	trace_irq_handler_entry(irq, action);
-	res = action->handler(irq, dev_id);
-	trace_irq_handler_exit(irq, action, res);
+	if (likely(action)) {
+		trace_irq_handler_entry(irq, action);
+		res = action->handler(irq, raw_cpu_ptr(action->percpu_dev_id));
+		trace_irq_handler_exit(irq, action, res);
+	} else {
+		unsigned int cpu = smp_processor_id();
+		bool enabled = cpumask_test_cpu(cpu, desc->percpu_enabled);
+
+		if (enabled)
+			irq_percpu_disable(desc, cpu);
+
+		pr_err_once("Spurious%s percpu IRQ%u on CPU%u\n",
+			    enabled ? " and unmasked" : "", irq, cpu);
+	}
 
 	if (chip->irq_eoi)
 		chip->irq_eoi(&desc->irq_data);
@@ -882,7 +967,8 @@ void irq_cpu_offline(void)
 void irq_chip_ack_parent(struct irq_data *data)
 {
 	data = data->parent_data;
-	data->chip->irq_ack(data);
+	if (data->chip->irq_ack)
+		data->chip->irq_ack(data);
 }
 
 /**
@@ -892,7 +978,8 @@ void irq_chip_ack_parent(struct irq_data *data)
 void irq_chip_mask_parent(struct irq_data *data)
 {
 	data = data->parent_data;
-	data->chip->irq_mask(data);
+	if (data->chip->irq_mask)
+		data->chip->irq_mask(data);
 }
 
 /**
@@ -902,7 +989,8 @@ void irq_chip_mask_parent(struct irq_data *data)
 void irq_chip_unmask_parent(struct irq_data *data)
 {
 	data = data->parent_data;
-	data->chip->irq_unmask(data);
+	if (data->chip->irq_unmask)
+		data->chip->irq_unmask(data);
 }
 
 /**
@@ -912,7 +1000,8 @@ void irq_chip_unmask_parent(struct irq_data *data)
 void irq_chip_eoi_parent(struct irq_data *data)
 {
 	data = data->parent_data;
-	data->chip->irq_eoi(data);
+	if (data->chip->irq_eoi)
+		data->chip->irq_eoi(data);
 }
 
 /**

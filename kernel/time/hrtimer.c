@@ -98,6 +98,9 @@ DEFINE_PER_CPU(struct hrtimer_cpu_base, hrtimer_bases) =
 };
 
 static const int hrtimer_clock_to_base_table[MAX_CLOCKS] = {
+	/* Make sure we catch unsupported clockids */
+	[0 ... MAX_CLOCKS - 1]	= HRTIMER_MAX_CLOCK_BASES,
+
 	[CLOCK_REALTIME]	= HRTIMER_BASE_REALTIME,
 	[CLOCK_MONOTONIC]	= HRTIMER_BASE_MONOTONIC,
 	[CLOCK_BOOTTIME]	= HRTIMER_BASE_BOOTTIME,
@@ -106,7 +109,14 @@ static const int hrtimer_clock_to_base_table[MAX_CLOCKS] = {
 
 static inline int hrtimer_clockid_to_base(clockid_t clock_id)
 {
-	return hrtimer_clock_to_base_table[clock_id];
+	if (likely(clock_id < MAX_CLOCKS)) {
+		int base = hrtimer_clock_to_base_table[clock_id];
+
+		if (likely(base != HRTIMER_MAX_CLOCK_BASES))
+			return base;
+	}
+	WARN(1, "Invalid clockid %d. Using MONOTONIC\n", clock_id);
+	return HRTIMER_BASE_MONOTONIC;
 }
 
 
@@ -119,7 +129,7 @@ static void hrtimer_get_softirq_time(struct hrtimer_cpu_base *base)
 	ktime_t xtim, mono, boot, tai;
 	ktime_t off_real, off_boot, off_tai;
 
-	mono = ktime_get_update_offsets_tick(&off_real, &off_boot, &off_tai);
+	mono = ktime_get_update_offsets_now(&off_real, &off_boot, &off_tai);
 	boot = ktime_add(mono, off_boot);
 	xtim = ktime_add(mono, off_real);
 	tai = ktime_add(mono, off_tai);

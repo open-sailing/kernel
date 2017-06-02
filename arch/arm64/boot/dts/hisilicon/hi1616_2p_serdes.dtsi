@@ -1,0 +1,114 @@
+serdes@0 {
+	compatible = "hisi,hi1610-serdes";
+	id = <0>;
+	reg =	<0x0 0xc0000000 0 0x10000>,
+		<0x0 0xa0000000 0 0x10000>,
+		<0x0 0xd0000000 0 0x10000>,
+		<0x0 0xc2200000 0 0x40000>,
+		<0x0 0xc2240000 0 0x40000>;
+	reg-names =	"sas_dsaf_base",
+			"sas_pcie_base",
+			"alg_hccs_base",
+			"hilink34_base",
+			"hilink34_sel_base";
+	Hilink@0 {
+		id = <0>;
+	};
+	Hilink@1 {
+		id = <1>;
+	};
+	Hilink@2 {
+		id = <2>;
+	};
+	Hilink@3 {
+		id = <3>;
+	};
+	Hilink@4 {
+		id = <4>;
+	};
+	Hilink@5 {
+		id = <5>;
+	};
+	Hilink@6 {
+		id = <6>;
+	};
+};
+serdes@1 {
+	compatible = "hisi,hi1610-serdes";
+	id = <1>;
+	reg =	<0x8 0xc0000000 0 0x10000>,
+		<0x8 0xa0000000 0 0x10000>,
+		<0x8 0xd0000000 0 0x10000>;
+	reg-names =	"sas_dsaf_base",
+			"sas_pcie_base",
+			"alg_hccs_base";
+	Hilink@0 {
+		id = <0>;
+	};
+	Hilink@1 {
+		id = <1>;
+	};
+	Hilink@5 {
+		id = <5>;
+	};
+	Hilink@6 {
+		id = <6>;
+	};
+};
+serdes@2 {
+	compatible = "hisi,hi1610-serdes";
+	id = <2>;
+	reg =	<0x400 0xc0000000 0 0x10000>,
+		<0x400 0xa0000000 0 0x10000>,
+		<0x400 0xd0000000 0 0x10000>,
+		<0x400 0xc2200000 0 0x40000>,
+		<0x400 0xc2240000 0 0x40000>;
+	reg-names =	"sas_dsaf_base",
+			"sas_pcie_base",
+			"alg_hccs_base",
+			"hilink34_base",
+			"hilink34_sel_base";
+	Hilink@0 {
+		id = <0>;
+	};
+	Hilink@1 {
+		id = <1>;
+	};
+	Hilink@2 {
+		id = <2>;
+	};
+	Hilink@3 {
+		id = <3>;
+	};
+	Hilink@4 {
+		id = <4>;
+	};
+	Hilink@5 {
+		id = <5>;
+	};
+	Hilink@6 {
+		id = <6>;
+	};
+};
+serdes@3 {
+	compatible = "hisi,hi1610-serdes";
+	id = <3>;
+	reg =	<0x408 0xc0000000 0 0x10000>,
+		<0x408 0xa0000000 0 0x10000>,
+		<0x408 0xd0000000 0 0x10000>;
+	reg-names =	"sas_dsaf_base",
+			"sas_pcie_base",
+			"alg_hccs_base";
+	Hilink@0 {
+		id = <0>;
+	};
+	Hilink@1 {
+		id = <1>;
+	};
+	Hilink@5 {
+		id = <5>;
+	};
+	Hilink@6 {
+		id = <6>;
+	};
+};

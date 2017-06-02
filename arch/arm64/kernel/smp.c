@@ -36,6 +36,8 @@
 #include <linux/completion.h>
 #include <linux/of.h>
 #include <linux/irq_work.h>
+#include <linux/kexec.h>
+#include <linux/nmi.h>
 
 #include <asm/alternative.h>
 #include <asm/atomic.h>
@@ -43,7 +45,9 @@
 #include <asm/cpu.h>
 #include <asm/cputype.h>
 #include <asm/cpu_ops.h>
+#include <asm/kexec.h>
 #include <asm/mmu_context.h>
+#include <asm/numa.h>
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
 #include <asm/processor.h>
@@ -51,10 +55,14 @@
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
 #include <asm/ptrace.h>
+#include <asm/hisi-llc.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/ipi.h>
 
+#ifdef CONFIG_KEXEC
+extern void handle_interrupts_status(void);
+#endif
 /*
  * as from 2.5, kernels no longer have an init_tasks structure
  * so we need some other way of telling a new secondary core
@@ -66,6 +74,7 @@ enum ipi_msg_type {
 	IPI_RESCHEDULE,
 	IPI_CALL_FUNC,
 	IPI_CPU_STOP,
+	IPI_CPU_CRASH_STOP,
 	IPI_TIMER,
 	IPI_IRQ_WORK,
 };
@@ -123,6 +132,7 @@ int __cpu_up(unsigned int cpu, struct task_struct *idle)
 static void smp_store_cpu_info(unsigned int cpuid)
 {
 	store_cpu_topology(cpuid);
+	numa_store_cpu_info(cpuid);
 }
 
 /*
@@ -381,6 +391,7 @@ void __init of_smp_init_cpus(void)
 			}
 
 			bootcpu_valid = true;
+			early_map_cpu_to_node(0, of_node_to_nid(dn));
 
 			/*
 			 * cpu_logical_map has already been
@@ -402,6 +413,8 @@ void __init of_smp_init_cpus(void)
 
 		pr_debug("cpu logical map 0x%llx\n", hwid);
 		cpu_logical_map(cpu) = hwid;
+
+		early_map_cpu_to_node(cpu, of_node_to_nid(dn));
 next:
 		cpu++;
 	}
@@ -483,6 +496,7 @@ static const char *ipi_types[NR_IPI] __tracepoint_string = {
 	S(IPI_RESCHEDULE, "Rescheduling interrupts"),
 	S(IPI_CALL_FUNC, "Function call interrupts"),
 	S(IPI_CPU_STOP, "CPU stop interrupts"),
+	S(IPI_CPU_CRASH_STOP, "CPU stop (for crash dump) interrupts"),
 	S(IPI_TIMER, "Timer broadcast interrupts"),
 	S(IPI_IRQ_WORK, "IRQ work interrupts"),
 };
@@ -536,27 +550,41 @@ void arch_irq_work_raise(void)
 }
 #endif
 
-static DEFINE_RAW_SPINLOCK(stop_lock);
-
 /*
  * ipi_cpu_stop - handle IPI from smp_send_stop()
  */
-static void ipi_cpu_stop(unsigned int cpu)
+static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 {
-	if (system_state == SYSTEM_BOOTING ||
-	    system_state == SYSTEM_RUNNING) {
-		raw_spin_lock(&stop_lock);
-		pr_crit("CPU%u: stopping\n", cpu);
-		dump_stack();
-		raw_spin_unlock(&stop_lock);
-	}
-
 	set_cpu_online(cpu, false);
 
 	local_irq_disable();
 
 	while (1)
 		cpu_relax();
+}
+
+#ifdef CONFIG_KEXEC
+static atomic_t waiting_for_crash_ipi;
+#endif
+
+static void ipi_cpu_crash_stop(unsigned int cpu, struct pt_regs *regs)
+{
+#ifdef CONFIG_KEXEC
+	crash_save_cpu(regs, cpu);
+
+	atomic_dec(&waiting_for_crash_ipi);
+
+	local_irq_disable();
+#ifdef CONFIG_HOTPLUG_CPU
+	if (cpu_ops[cpu]->cpu_die)
+		cpu_ops[cpu]->cpu_die(cpu);
+#endif
+	/* just in case */
+	while (1) {
+		wfe();
+		wfi();
+	}
+#endif
 }
 
 /*
@@ -585,8 +613,21 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 
 	case IPI_CPU_STOP:
 		irq_enter();
-		ipi_cpu_stop(cpu);
+#ifdef CONFIG_HISI_AARCH64_NMI
+		nmi_set_active_state(cpu, NMI_WATCHDOG_OFF);
+#endif
+		ipi_cpu_stop(cpu, regs);
 		irq_exit();
+		break;
+
+	case IPI_CPU_CRASH_STOP:
+		irq_enter();
+#ifdef CONFIG_HISI_AARCH64_NMI
+		nmi_set_active_state(cpu, NMI_WATCHDOG_OFF);
+#endif
+		pr_info("try to stop cpu %d when crash\n", smp_processor_id());
+		ipi_cpu_crash_stop(cpu, regs);
+		unreachable();
 		break;
 
 #ifdef CONFIG_GENERIC_CLOCKEVENTS_BROADCAST
@@ -637,17 +678,71 @@ void smp_send_stop(void)
 		cpumask_copy(&mask, cpu_online_mask);
 		cpumask_clear_cpu(smp_processor_id(), &mask);
 
+		if (system_state == SYSTEM_BOOTING ||
+		    system_state == SYSTEM_RUNNING)
+			pr_crit("SMP: stopping secondary CPUs\n");
 		smp_cross_call(&mask, IPI_CPU_STOP);
 	}
 
-	/* Wait up to one second for other CPUs to stop */
+	/* Wait up to 1 second for other CPUs to stop */
 	timeout = USEC_PER_SEC;
 	while (num_online_cpus() > 1 && timeout--)
 		udelay(1);
 
-	if (num_online_cpus() > 1)
-		pr_warning("SMP: failed to stop secondary CPUs\n");
+	if (num_online_cpus() > 1) {
+		pr_warning("SMP: failed to stop secondary CPUs %*pbl\n",
+			   cpumask_pr_args(cpu_online_mask));
+#ifdef CONFIG_KEXEC
+		handle_interrupts_status();
+
+		timeout = USEC_PER_SEC;
+		while (num_online_cpus() > 1 && timeout--)
+			udelay(1);
+
+		if (num_online_cpus() > 1)
+			pr_warning("SMP: failed to stop secondary CPUs %*pbl\n",
+			   cpumask_pr_args(cpu_online_mask));
+		else
+			pr_info("SMP: all CPUs stopped\n");
+#endif
+	}
 }
+
+#ifdef CONFIG_KEXEC
+void check_cpu_status(void)
+{
+	unsigned long timeout;
+	/* Wait up to one second for other CPUs to stop */
+	timeout = USEC_PER_SEC;
+	while ((atomic_read(&waiting_for_crash_ipi) > 0) && timeout--)
+		udelay(1);
+
+	if (atomic_read(&waiting_for_crash_ipi) > 0)
+		pr_warn("SMP: failed to stop secondary CPUs %d\n",
+			atomic_read(&waiting_for_crash_ipi));
+	else
+		pr_info("SMP: all cpus stopped\n");
+}
+
+void smp_send_crash_stop(void)
+{
+	cpumask_t mask;
+
+	if (num_online_cpus() == 1)
+		return;
+
+	cpumask_copy(&mask, cpu_online_mask);
+	cpumask_clear_cpu(smp_processor_id(), &mask);
+
+	atomic_set(&waiting_for_crash_ipi, num_online_cpus() - 1);
+
+	pr_info("SMP: stopping secondary CPUs on cpu %d\n", smp_processor_id());
+	pr_crit("SMP: stopping secondary CPUs\n");
+	smp_cross_call(&mask, IPI_CPU_CRASH_STOP);
+
+	check_cpu_status();
+}
+#endif
 
 /*
  * not supported here

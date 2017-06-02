@@ -7,22 +7,22 @@
 #include <linux/perf_event.h>
 #include <linux/slab.h>
 #include <asm/cpu_device_id.h>
+#include <asm/intel_rdt_common.h>
 #include "perf_event.h"
 
-#define MSR_IA32_PQR_ASSOC	0x0c8f
 #define MSR_IA32_QM_CTR		0x0c8e
 #define MSR_IA32_QM_EVTSEL	0x0c8d
 
 static unsigned int cqm_max_rmid = -1;
 static unsigned int cqm_l3_scale; /* supposedly cacheline size */
 
-struct intel_cqm_state {
-	raw_spinlock_t		lock;
-	int			rmid;
-	int			cnt;
-};
-
-static DEFINE_PER_CPU(struct intel_cqm_state, cqm_state);
+/*
+ * The cached intel_pqr_state is strictly per CPU and can never be
+ * updated from a remote CPU. Both functions which modify the state
+ * (intel_cqm_event_start and intel_cqm_event_stop) are called with
+ * interrupts disabled, which is sufficient for the protection.
+ */
+DEFINE_PER_CPU(struct intel_pqr_state, pqr_state);
 
 /*
  * Protects cache_cgroups and cqm_rmid_free_lru and cqm_rmid_limbo_lru.
@@ -459,8 +459,13 @@ static bool intel_cqm_sched_in_event(unsigned int rmid)
 
 	leader = list_first_entry(&cache_groups, struct perf_event,
 				  hw.cqm_groups_entry);
-	event = leader;
 
+	if (!list_empty(&cache_groups) && !__rmid_valid(leader->hw.cqm_rmid)) {
+		intel_cqm_xchg_rmid(leader, rmid);
+		return true;
+	}
+
+	event = leader;
 	list_for_each_entry_continue(event, &cache_groups,
 				     hw.cqm_groups_entry) {
 		if (__rmid_valid(event->hw.cqm_rmid))
@@ -627,6 +632,7 @@ static void intel_cqm_sched_out_conflicting_events(struct perf_event *event)
 {
 	struct perf_event *group, *g;
 	unsigned int rmid;
+	LIST_HEAD(conflicting_groups);
 
 	lockdep_assert_held(&cache_mutex);
 
@@ -650,7 +656,10 @@ static void intel_cqm_sched_out_conflicting_events(struct perf_event *event)
 
 		intel_cqm_xchg_rmid(group, INVALID_RMID);
 		__put_rmid(rmid);
+		list_move_tail(&group->hw.cqm_groups_entry, &conflicting_groups);
 	}
+
+	list_splice_tail(&conflicting_groups, &cache_groups);
 }
 
 /*
@@ -679,9 +688,9 @@ static void intel_cqm_sched_out_conflicting_events(struct perf_event *event)
  */
 static bool __intel_cqm_rmid_rotate(void)
 {
-	struct perf_event *group, *start = NULL;
+	struct perf_event *group, *start;
 	unsigned int threshold_limit;
-	unsigned int nr_needed = 0;
+	unsigned int nr_needed;
 	unsigned int nr_available;
 	bool rotated = false;
 
@@ -695,6 +704,8 @@ again:
 	if (list_empty(&cache_groups) && list_empty(&cqm_rmid_limbo_lru))
 		goto out;
 
+	nr_needed = 0;
+	start = NULL;
 	list_for_each_entry(group, &cache_groups, hw.cqm_groups_entry) {
 		if (!__rmid_valid(group->hw.cqm_rmid)) {
 			if (!start)
@@ -969,49 +980,40 @@ out:
 
 static void intel_cqm_event_start(struct perf_event *event, int mode)
 {
-	struct intel_cqm_state *state = this_cpu_ptr(&cqm_state);
+	struct intel_pqr_state *state = this_cpu_ptr(&pqr_state);
 	unsigned int rmid = event->hw.cqm_rmid;
-	unsigned long flags;
 
 	if (!(event->hw.cqm_state & PERF_HES_STOPPED))
 		return;
 
 	event->hw.cqm_state &= ~PERF_HES_STOPPED;
 
-	raw_spin_lock_irqsave(&state->lock, flags);
-
-	if (state->cnt++)
+	if (state->rmid_usecnt++)
 		WARN_ON_ONCE(state->rmid != rmid);
 	else
 		WARN_ON_ONCE(state->rmid);
 
 	state->rmid = rmid;
-	wrmsrl(MSR_IA32_PQR_ASSOC, state->rmid);
-
-	raw_spin_unlock_irqrestore(&state->lock, flags);
+	wrmsr(MSR_IA32_PQR_ASSOC, rmid, state->closid);
 }
 
 static void intel_cqm_event_stop(struct perf_event *event, int mode)
 {
-	struct intel_cqm_state *state = this_cpu_ptr(&cqm_state);
-	unsigned long flags;
+	struct intel_pqr_state *state = this_cpu_ptr(&pqr_state);
 
 	if (event->hw.cqm_state & PERF_HES_STOPPED)
 		return;
 
 	event->hw.cqm_state |= PERF_HES_STOPPED;
 
-	raw_spin_lock_irqsave(&state->lock, flags);
 	intel_cqm_event_read(event);
 
-	if (!--state->cnt) {
+	if (!--state->rmid_usecnt) {
 		state->rmid = 0;
-		wrmsrl(MSR_IA32_PQR_ASSOC, 0);
+		wrmsr(MSR_IA32_PQR_ASSOC, 0, state->closid);
 	} else {
 		WARN_ON_ONCE(!state->rmid);
 	}
-
-	raw_spin_unlock_irqrestore(&state->lock, flags);
 }
 
 static int intel_cqm_event_add(struct perf_event *event, int mode)
@@ -1251,12 +1253,12 @@ static inline void cqm_pick_event_reader(int cpu)
 
 static void intel_cqm_cpu_prepare(unsigned int cpu)
 {
-	struct intel_cqm_state *state = &per_cpu(cqm_state, cpu);
+	struct intel_pqr_state *state = &per_cpu(pqr_state, cpu);
 	struct cpuinfo_x86 *c = &cpu_data(cpu);
 
-	raw_spin_lock_init(&state->lock);
 	state->rmid = 0;
-	state->cnt  = 0;
+	state->closid = 0;
+	state->rmid_usecnt = 0;
 
 	WARN_ON(c->x86_cache_max_rmid != cqm_max_rmid);
 	WARN_ON(c->x86_cache_occ_scale != cqm_l3_scale);

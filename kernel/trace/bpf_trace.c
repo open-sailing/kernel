@@ -11,7 +11,10 @@
 #include <linux/filter.h>
 #include <linux/uaccess.h>
 #include <linux/ctype.h>
+
 #include "trace.h"
+#define CREATE_TRACE_POINTS
+#include <trace/events/bpf.h>
 
 static DEFINE_PER_CPU(int, bpf_prog_active);
 
@@ -79,16 +82,22 @@ static const struct bpf_func_proto bpf_probe_read_proto = {
 	.arg3_type	= ARG_ANYTHING,
 };
 
-static u64 bpf_ktime_get_ns(u64 r1, u64 r2, u64 r3, u64 r4, u64 r5)
+static u64 bpf_output_trace_data(u64 r1, u64 r2, u64 r3, u64 r4, u64 r5)
 {
-	/* NMI safe access to clock monotonic */
-	return ktime_get_mono_fast_ns();
+	void *src = (void *) (long) r1;
+	int size = (int) r2;
+
+	trace_bpf_output_data(src, size);
+
+	return 0;
 }
 
-static const struct bpf_func_proto bpf_ktime_get_ns_proto = {
-	.func		= bpf_ktime_get_ns,
+static const struct bpf_func_proto bpf_output_trace_data_proto = {
+	.func		= bpf_output_trace_data,
 	.gpl_only	= true,
 	.ret_type	= RET_INTEGER,
+	.arg1_type	= ARG_PTR_TO_STACK,
+	.arg2_type	= ARG_CONST_STACK_SIZE,
 };
 
 /*
@@ -159,6 +168,35 @@ static const struct bpf_func_proto bpf_trace_printk_proto = {
 	.arg2_type	= ARG_CONST_STACK_SIZE,
 };
 
+static u64 bpf_perf_event_read(u64 r1, u64 index, u64 r3, u64 r4, u64 r5)
+{
+	struct bpf_map *map = (struct bpf_map *) (unsigned long) r1;
+	struct bpf_array *array = container_of(map, struct bpf_array, map);
+	struct perf_event *event;
+
+	if (unlikely(index >= array->map.max_entries))
+		return -E2BIG;
+
+	event = (struct perf_event *)array->ptrs[index];
+	if (!event)
+		return -ENOENT;
+
+	/*
+	 * we don't know if the function is run successfully by the
+	 * return value. It can be judged in other places, such as
+	 * eBPF programs.
+	 */
+	return perf_event_read_local(event);
+}
+
+const struct bpf_func_proto bpf_perf_event_read_proto = {
+	.func		= bpf_perf_event_read,
+	.gpl_only	= false,
+	.ret_type	= RET_INTEGER,
+	.arg1_type	= ARG_CONST_MAP_PTR,
+	.arg2_type	= ARG_ANYTHING,
+};
+
 static const struct bpf_func_proto *kprobe_prog_func_proto(enum bpf_func_id func_id)
 {
 	switch (func_id) {
@@ -170,8 +208,18 @@ static const struct bpf_func_proto *kprobe_prog_func_proto(enum bpf_func_id func
 		return &bpf_map_delete_elem_proto;
 	case BPF_FUNC_probe_read:
 		return &bpf_probe_read_proto;
+	case BPF_FUNC_output_trace_data:
+		return &bpf_output_trace_data_proto;
 	case BPF_FUNC_ktime_get_ns:
 		return &bpf_ktime_get_ns_proto;
+	case BPF_FUNC_tail_call:
+		return &bpf_tail_call_proto;
+	case BPF_FUNC_get_current_pid_tgid:
+		return &bpf_get_current_pid_tgid_proto;
+	case BPF_FUNC_get_current_uid_gid:
+		return &bpf_get_current_uid_gid_proto;
+	case BPF_FUNC_get_current_comm:
+		return &bpf_get_current_comm_proto;
 
 	case BPF_FUNC_trace_printk:
 		/*
@@ -181,6 +229,10 @@ static const struct bpf_func_proto *kprobe_prog_func_proto(enum bpf_func_id func
 		trace_printk_init_buffers();
 
 		return &bpf_trace_printk_proto;
+	case BPF_FUNC_get_smp_processor_id:
+		return &bpf_get_smp_processor_id_proto;
+	case BPF_FUNC_perf_event_read:
+		return &bpf_perf_event_read_proto;
 	default:
 		return NULL;
 	}

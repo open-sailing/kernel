@@ -130,11 +130,7 @@ static struct dentry *v9fs_mount(struct file_system_type *fs_type, int flags,
 	fid = v9fs_session_init(v9ses, dev_name, data);
 	if (IS_ERR(fid)) {
 		retval = PTR_ERR(fid);
-		/*
-		 * we need to call session_close to tear down some
-		 * of the data structure setup by session_init
-		 */
-		goto close_session;
+		goto free_session;
 	}
 
 	sb = sget(fs_type, NULL, v9fs_set_super, flags, v9ses);
@@ -144,8 +140,16 @@ static struct dentry *v9fs_mount(struct file_system_type *fs_type, int flags,
 	}
 	v9fs_fill_super(sb, v9ses, flags, data);
 
-	if (v9ses->cache == CACHE_LOOSE || v9ses->cache == CACHE_FSCACHE)
+	if (v9ses->cache == CACHE_LOOSE || v9ses->cache == CACHE_FSCACHE) {
+#if defined(CONFIG_KVM_GUEST_MICROVM)
+		retval = alloc_init_flush_set(v9ses);
+		if (IS_ERR(v9ses->flush)) {
+			retval = PTR_ERR(v9ses->flush);
+			goto release_sb;
+		}
+#endif /* CONFIG_KVM_GUEST_MICROVM */
 		sb->s_d_op = &v9fs_cached_dentry_operations;
+	}
 	else
 		sb->s_d_op = &v9fs_dentry_operations;
 
@@ -195,8 +199,8 @@ static struct dentry *v9fs_mount(struct file_system_type *fs_type, int flags,
 
 clunk_fid:
 	p9_client_clunk(fid);
-close_session:
 	v9fs_session_close(v9ses);
+free_session:
 	kfree(v9ses);
 	return ERR_PTR(retval);
 
@@ -339,10 +343,13 @@ static int v9fs_write_inode_dotl(struct inode *inode,
 	return 0;
 }
 
+int v9fs_remount(struct super_block *super, int *mount_flags, char *opts);
+
 static const struct super_operations v9fs_super_ops = {
 	.alloc_inode = v9fs_alloc_inode,
 	.destroy_inode = v9fs_destroy_inode,
 	.statfs = simple_statfs,
+	.remount_fs = v9fs_remount,
 	.evict_inode = v9fs_evict_inode,
 	.show_options = generic_show_options,
 	.umount_begin = v9fs_umount_begin,
@@ -353,6 +360,7 @@ static const struct super_operations v9fs_super_ops_dotl = {
 	.alloc_inode = v9fs_alloc_inode,
 	.destroy_inode = v9fs_destroy_inode,
 	.statfs = v9fs_statfs,
+	.remount_fs = v9fs_remount,
 	.drop_inode = v9fs_drop_inode,
 	.evict_inode = v9fs_evict_inode,
 	.show_options = generic_show_options,

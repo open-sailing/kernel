@@ -23,7 +23,8 @@
  */
 #include <linux/types.h>
 #include <linux/sched.h>
-#include <linux/ptrace.h>
+
+#include <asm/is_compat.h>
 
 #define COMPAT_USER_HZ		100
 #ifdef __AARCH64EB__
@@ -234,7 +235,7 @@ static inline compat_uptr_t ptr_to_compat(void __user *uptr)
 	return (u32)(unsigned long)uptr;
 }
 
-#define compat_user_stack_pointer() (user_stack_pointer(current_pt_regs()))
+#define compat_user_stack_pointer() (user_stack_pointer(task_pt_regs(current)))
 
 static inline void __user *arch_compat_alloc_user_space(long len)
 {
@@ -298,23 +299,6 @@ struct compat_shmid64_ds {
 	compat_ulong_t __unused4;
 	compat_ulong_t __unused5;
 };
-
-static inline int is_compat_task(void)
-{
-	return test_thread_flag(TIF_32BIT);
-}
-
-static inline int is_compat_thread(struct thread_info *thread)
-{
-	return test_ti_thread_flag(thread, TIF_32BIT);
-}
-
-#else /* !CONFIG_COMPAT */
-
-static inline int is_compat_thread(struct thread_info *thread)
-{
-	return 0;
-}
 
 #endif /* CONFIG_COMPAT */
 #endif /* __KERNEL__ */

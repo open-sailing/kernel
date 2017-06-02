@@ -127,7 +127,7 @@ void drm_atomic_state_clear(struct drm_atomic_state *state)
 	for (i = 0; i < state->num_connector; i++) {
 		struct drm_connector *connector = state->connectors[i];
 
-		if (!connector)
+		if (!connector || !connector->funcs)
 			continue;
 
 		WARN_ON(!drm_modeset_is_locked(&config->connection_mutex));

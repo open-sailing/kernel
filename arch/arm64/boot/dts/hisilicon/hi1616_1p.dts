@@ -1,0 +1,30 @@
+/**
+ * dts file for Hisilicon Hi1616 Product Board
+ *
+ * Copyright (C) 2016 Hisilicon Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * publishhed by the Free Software Foundation.
+ *
+ */
+
+/dts-v1/;
+
+/include/ "hi1616_1p.dtsi"
+
+/ {
+	model = "Hisilicon Hi1616 Product Board";
+	compatible = "hisilicon,hi1616";
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x00000000 0x0 0x40000000>;
+		numa-node-id = <0>;
+	};
+
+	chosen {
+		bootargs = "rdinit=/sbin/init earlycon initrd=0x7000000,500M pci=pcie_bus_safe hisi_lpc_uart=off nohz=off";
+		stdout-path = "serial0:115200n8";
+	};
+};

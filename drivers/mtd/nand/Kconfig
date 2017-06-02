@@ -511,7 +511,7 @@ config MTD_NAND_FSMC
 	  Flexible Static Memory Controller (FSMC)
 
 config MTD_NAND_XWAY
-	tristate "Support for NAND on Lantiq XWAY SoC"
+	bool "Support for NAND on Lantiq XWAY SoC"
 	depends on LANTIQ && SOC_TYPE_XWAY
 	select MTD_NAND_PLATFORM
 	help
@@ -529,5 +529,11 @@ config MTD_NAND_HISI504
 	depends on HAS_DMA
 	help
 	  Enables support for NAND controller on Hisilicon SoC Hip04.
+
+config MTD_NAND_HISI650
+	tristate "Support for NAND controller on Hisilicon SoC Hip05"
+	depends on ARM64
+	help
+	  Enables support for NAND Flash controller on Hisilicon SoC Hip05.
 
 endif # MTD_NAND

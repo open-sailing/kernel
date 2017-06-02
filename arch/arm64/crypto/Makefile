@@ -29,6 +29,10 @@ aes-ce-blk-y := aes-glue-ce.o aes-ce.o
 obj-$(CONFIG_CRYPTO_AES_ARM64_NEON_BLK) += aes-neon-blk.o
 aes-neon-blk-y := aes-glue-neon.o aes-neon.o
 
+obj-$(CONFIG_CRYPTO_CRCT10DIF_NEON) += crct10dif-neon.o
+crct10dif-neon-y := crct10dif-neon-asm_64.o crct10dif-neon_glue.o
+AFLAGS_crct10dif-neon-asm_64.o	:= -march=armv8-a+crypto
+
 AFLAGS_aes-ce.o		:= -DINTERLEAVE=4
 AFLAGS_aes-neon.o	:= -DINTERLEAVE=4
 

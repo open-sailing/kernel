@@ -16,8 +16,9 @@ extern void tk_debug_account_sleep_time(struct timespec64 *t);
 static inline cycle_t clocksource_delta(cycle_t now, cycle_t last, cycle_t mask)
 {
 	cycle_t ret = (now - last) & mask;
+	cycle_t negative = ret & ~(mask >> 1);
 
-	return (s64) ret > 0 ? ret : 0;
+	return negative ? 0 : ret;
 }
 #else
 static inline cycle_t clocksource_delta(cycle_t now, cycle_t last, cycle_t mask)

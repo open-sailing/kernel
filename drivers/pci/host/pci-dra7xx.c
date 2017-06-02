@@ -61,6 +61,7 @@
 
 #define	PCIECTRL_DRA7XX_CONF_PHY_CS			0x010C
 #define	LINK_UP						BIT(16)
+#define	CPU_TO_BUS_ADDR					0x0FFFFFFF
 
 struct dra7xx_pcie {
 	void __iomem		*base;
@@ -143,7 +144,19 @@ static void dra7xx_pcie_enable_interrupts(struct pcie_port *pp)
 
 static void dra7xx_pcie_host_init(struct pcie_port *pp)
 {
+	if (pp->io_base)
+		pp->io_base &= CPU_TO_BUS_ADDR;
+
+	if (pp->mem_base)
+		pp->mem_base &= CPU_TO_BUS_ADDR;
+
+	if (pp->cfg0_base) {
+		pp->cfg0_base &= CPU_TO_BUS_ADDR;
+		pp->cfg1_base &= CPU_TO_BUS_ADDR;
+	}
+
 	dw_pcie_setup_rc(pp);
+
 	dra7xx_pcie_establish_link(pp);
 	if (IS_ENABLED(CONFIG_PCI_MSI))
 		dw_pcie_msi_init(pp);

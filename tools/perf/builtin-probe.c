@@ -189,10 +189,8 @@ static int opt_set_target(const struct option *opt, const char *str,
 	if  (str) {
 		if (!strcmp(opt->long_name, "exec"))
 			params.uprobes = true;
-#ifdef HAVE_DWARF_SUPPORT
 		else if (!strcmp(opt->long_name, "module"))
 			params.uprobes = false;
-#endif
 		else
 			return ret;
 
@@ -371,9 +369,6 @@ __cmd_probe(int argc, const char **argv, const char *prefix __maybe_unused)
 		   "file", "vmlinux pathname"),
 	OPT_STRING('s', "source", &symbol_conf.source_prefix,
 		   "directory", "path to kernel source"),
-	OPT_CALLBACK('m', "module", NULL, "modname|path",
-		"target module name (for online) or path (for offline)",
-		opt_set_target),
 #endif
 	OPT__DRY_RUN(&probe_event_dry_run),
 	OPT_INTEGER('\0', "max-probes", &params.max_probe_points,
@@ -387,6 +382,9 @@ __cmd_probe(int argc, const char **argv, const char *prefix __maybe_unused)
 		     opt_set_filter),
 	OPT_CALLBACK('x', "exec", NULL, "executable|path",
 			"target executable name or path", opt_set_target),
+	OPT_CALLBACK('m', "module", NULL, "modname|path",
+		"target module name (for online) or path (for offline)",
+		opt_set_target),
 	OPT_BOOLEAN(0, "demangle", &symbol_conf.demangle,
 		    "Enable symbol demangling"),
 	OPT_BOOLEAN(0, "demangle-kernel", &symbol_conf.demangle_kernel,
@@ -522,5 +520,5 @@ int cmd_probe(int argc, const char **argv, const char *prefix)
 		cleanup_params();
 	}
 
-	return ret;
+	return ret < 0 ? ret : 0;
 }

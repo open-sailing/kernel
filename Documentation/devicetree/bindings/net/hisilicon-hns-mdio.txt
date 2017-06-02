@@ -1,0 +1,38 @@
+Hisilicon MDIO bus controller
+
+* sub controller node
+
+Required properties:
+- compatible:
+	"hisilicon,peri-c-subctrl","syscon" if mdio connects to sub-ctrl
+	"hisilicon,io-wrap-ctrl","syscon" if mdio connects to io-wrap-ctrl
+- reg: address and length of the register set for the device.
+
+Properties:
+- compatible: can be one of:
+	"hisilicon,hi1382-mdio"
+	"hisilicon,hi1616-mdio"
+	"hisilicon,hns-mdio"
+	"hisilicon,mdio"
+  "hisilicon,hns-mdio" is recommended to be used for hip05 and later SOCs,
+  while "hisilicon,mdio" is optional for backwards compatibility only on
+  hip04 Soc.
+- reg: The base address of the MDIO bus controller register bank.
+- subctrl_vbase: sub control base addr
+- #address-cells: Must be <1>.
+- #size-cells: Must be <0>.  MDIO addresses have no size component.
+
+Typically an MDIO bus might have several children.
+
+Example:
+	mdio@803c0000 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "hisilicon,mdio","hisilicon,hns-mdio";
+		reg = <0x0 0x803c0000 0x0 0x10000>;
+		subctrl_vbase = <&peri_c_subctrl>;
+		ethernet-phy@0 {
+			...
+			reg = <0>;
+		};
+	};

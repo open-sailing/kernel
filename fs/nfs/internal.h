@@ -363,7 +363,7 @@ extern int nfs_drop_inode(struct inode *);
 extern void nfs_clear_inode(struct inode *);
 extern void nfs_evict_inode(struct inode *);
 void nfs_zap_acl_cache(struct inode *inode);
-extern int nfs_wait_bit_killable(struct wait_bit_key *key);
+extern int nfs_wait_bit_killable(struct wait_bit_key *key, int mode);
 
 /* super.c */
 extern const struct super_operations nfs_sops;
@@ -607,7 +607,7 @@ void nfs_mark_page_unstable(struct page *page)
 	struct inode *inode = page_file_mapping(page)->host;
 
 	inc_zone_page_state(page, NR_UNSTABLE_NFS);
-	inc_bdi_stat(inode_to_bdi(inode), BDI_RECLAIMABLE);
+	inc_wb_stat(&inode_to_bdi(inode)->wb, WB_RECLAIMABLE);
 	 __mark_inode_dirty(inode, I_DIRTY_DATASYNC);
 }
 

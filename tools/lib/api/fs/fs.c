@@ -15,6 +15,10 @@
 #include "debugfs.h"
 #include "fs.h"
 
+#ifndef HUGETLBFS_MAGIC
+#define HUGETLBFS_MAGIC        0x958458f6
+#endif
+
 static const char * const sysfs__fs_known_mountpoints[] = {
 	"/sys",
 	0,
@@ -22,6 +26,10 @@ static const char * const sysfs__fs_known_mountpoints[] = {
 
 static const char * const procfs__known_mountpoints[] = {
 	"/proc",
+	0,
+};
+
+static const char * const hugetlbfs__known_mountpoints[] = {
 	0,
 };
 
@@ -36,6 +44,7 @@ struct fs {
 enum {
 	FS__SYSFS  = 0,
 	FS__PROCFS = 1,
+	FS__HUGETLBFS = 2,
 };
 
 static struct fs fs__entries[] = {
@@ -48,6 +57,11 @@ static struct fs fs__entries[] = {
 		.name	= "proc",
 		.mounts	= procfs__known_mountpoints,
 		.magic	= PROC_SUPER_MAGIC,
+	},
+	[FS__HUGETLBFS] = {
+		.name   = "hugetlbfs",
+		.mounts = hugetlbfs__known_mountpoints,
+		.magic  = HUGETLBFS_MAGIC,
 	},
 };
 
@@ -167,6 +181,7 @@ const char *name##__mountpoint(void)	\
 
 FS__MOUNTPOINT(sysfs,  FS__SYSFS);
 FS__MOUNTPOINT(procfs, FS__PROCFS);
+FS__MOUNTPOINT(hugetlbfs, FS__HUGETLBFS);
 
 int filename__read_int(const char *filename, int *value)
 {

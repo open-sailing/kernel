@@ -39,6 +39,7 @@
 #include "../scsi_sas_internal.h"
 
 static struct kmem_cache *sas_task_cache;
+struct workqueue_struct *topo_wq;
 
 struct sas_task *sas_alloc_task(gfp_t flags)
 {
@@ -115,6 +116,7 @@ void sas_hae_reset(struct work_struct *work)
 	struct sas_ha_struct *ha = ev->ha;
 
 	clear_bit(HAE_RESET, &ha->pending);
+	kfree(ev);
 }
 
 int sas_register_ha(struct sas_ha_struct *sas_ha)
@@ -131,6 +133,11 @@ int sas_register_ha(struct sas_ha_struct *sas_ha)
 	init_waitqueue_head(&sas_ha->eh_wait_q);
 	INIT_LIST_HEAD(&sas_ha->defer_q);
 	INIT_LIST_HEAD(&sas_ha->eh_dev_q);
+	topo_wq = create_singlethread_workqueue("sas_topo_wq");
+	if (!topo_wq) {
+		error = -EINVAL;
+		return error;
+	}
 
 	error = sas_register_phys(sas_ha);
 	if (error) {
@@ -185,6 +192,7 @@ int sas_unregister_ha(struct sas_ha_struct *sas_ha)
 	__sas_drain_work(sas_ha);
 	mutex_unlock(&sas_ha->drain_mutex);
 
+	destroy_workqueue(topo_wq);
 	return 0;
 }
 
@@ -252,8 +260,12 @@ static int transport_sas_phy_reset(struct sas_phy *phy, int hard_reset)
 	} else {
 		struct sas_rphy *rphy = dev_to_rphy(phy->dev.parent);
 		struct domain_device *ddev = sas_find_dev_by_rphy(rphy);
-		struct domain_device *ata_dev = sas_ex_to_ata(ddev, phy->number);
+		struct domain_device *ata_dev = NULL;
 
+		if (!ddev)
+			return -ENODEV;
+
+		ata_dev = sas_ex_to_ata(ddev, phy->number);
 		if (ata_dev && !hard_reset) {
 			sas_ata_schedule_reset(ata_dev);
 			sas_ata_wait_eh(ata_dev);
@@ -288,6 +300,9 @@ static int sas_phy_enable(struct sas_phy *phy, int enable)
 		struct sas_rphy *rphy = dev_to_rphy(phy->dev.parent);
 		struct domain_device *ddev = sas_find_dev_by_rphy(rphy);
 
+		if (!ddev)
+			return -ENODEV;
+
 		if (enable)
 			ret = transport_sas_phy_reset(phy, 0);
 		else
@@ -320,6 +335,10 @@ int sas_phy_reset(struct sas_phy *phy, int hard_reset)
 	} else {
 		struct sas_rphy *rphy = dev_to_rphy(phy->dev.parent);
 		struct domain_device *ddev = sas_find_dev_by_rphy(rphy);
+
+		if (!ddev)
+			return -ENODEV;
+
 		ret = sas_smp_phy_control(ddev, phy->number, reset_type, NULL);
 	}
 	return ret;
@@ -356,6 +375,10 @@ int sas_set_phy_speed(struct sas_phy *phy,
 	} else {
 		struct sas_rphy *rphy = dev_to_rphy(phy->dev.parent);
 		struct domain_device *ddev = sas_find_dev_by_rphy(rphy);
+
+		if (!ddev)
+			return -ENODEV;
+
 		ret = sas_smp_phy_control(ddev, phy->number,
 					  PHY_FUNC_LINK_RESET, rates);
 

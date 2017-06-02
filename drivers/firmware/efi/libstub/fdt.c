@@ -24,7 +24,7 @@ efi_status_t update_fdt(efi_system_table_t *sys_table, void *orig_fdt,
 			unsigned long map_size, unsigned long desc_size,
 			u32 desc_ver)
 {
-	int node, prev, num_rsv;
+	int node, num_rsv;
 	int status;
 	u32 fdt_val32;
 	u64 fdt_val64;
@@ -52,28 +52,6 @@ efi_status_t update_fdt(efi_system_table_t *sys_table, void *orig_fdt,
 
 	if (status != 0)
 		goto fdt_set_fail;
-
-	/*
-	 * Delete any memory nodes present. We must delete nodes which
-	 * early_init_dt_scan_memory may try to use.
-	 */
-	prev = 0;
-	for (;;) {
-		const char *type;
-		int len;
-
-		node = fdt_next_node(fdt, prev, NULL);
-		if (node < 0)
-			break;
-
-		type = fdt_getprop(fdt, node, "device_type", &len);
-		if (type && strncmp(type, "memory", len) == 0) {
-			fdt_del_node(fdt, node);
-			continue;
-		}
-
-		prev = node;
-	}
 
 	/*
 	 * Delete all memory reserve map entries. When booting via UEFI,
@@ -144,15 +122,6 @@ efi_status_t update_fdt(efi_system_table_t *sys_table, void *orig_fdt,
 	fdt_val32 = cpu_to_fdt32(desc_ver);
 	status = fdt_setprop(fdt, node, "linux,uefi-mmap-desc-ver",
 			     &fdt_val32, sizeof(fdt_val32));
-	if (status)
-		goto fdt_set_fail;
-
-	/*
-	 * Add kernel version banner so stub/kernel match can be
-	 * verified.
-	 */
-	status = fdt_setprop_string(fdt, node, "linux,uefi-stub-kern-ver",
-			     linux_banner);
 	if (status)
 		goto fdt_set_fail;
 
@@ -326,6 +295,7 @@ fail:
 void *get_fdt(efi_system_table_t *sys_table, unsigned long *fdt_size)
 {
 	efi_guid_t fdt_guid = DEVICE_TREE_GUID;
+	efi_guid_t fdt_hw_test_guid = DEVICE_TREE_HW_TEST_GUID;
 	efi_config_table_t *tables;
 	void *fdt;
 	int i;
@@ -333,16 +303,29 @@ void *get_fdt(efi_system_table_t *sys_table, unsigned long *fdt_size)
 	tables = (efi_config_table_t *) sys_table->tables;
 	fdt = NULL;
 
-	for (i = 0; i < sys_table->nr_tables; i++)
+	pr_efi(sys_table, "Start to find FDT...\n\n\n");
+
+	for (i = 0; i < sys_table->nr_tables; i++) {
 		if (efi_guidcmp(tables[i].guid, fdt_guid) == 0) {
-			fdt = (void *) tables[i].table;
-			if (fdt_check_header(fdt) != 0) {
-				pr_efi_err(sys_table, "Invalid header detected on UEFI supplied FDT, ignoring ...\n");
-				return NULL;
-			}
-			*fdt_size = fdt_totalsize(fdt);
+			pr_efi(sys_table, "Found FDT by the fdt_guid\n");
+			goto found;
+		}
+	}
+
+	for (i = 0; i < sys_table->nr_tables; i++) {
+		if (efi_guidcmp(tables[i].guid, fdt_hw_test_guid) == 0) {
+			pr_efi(sys_table, "Found FDT by the fdt_hw_test_guid\n");
 			break;
-	 }
+		}
+	}
+
+found:
+	fdt = (void *) tables[i].table;
+	if (fdt_check_header(fdt) != 0) {
+		pr_efi_err(sys_table, "Invalid header detected on UEFI supplied FDT, ignoring ...\n");
+		return NULL;
+	}
+	*fdt_size = fdt_totalsize(fdt);
 
 	return fdt;
 }

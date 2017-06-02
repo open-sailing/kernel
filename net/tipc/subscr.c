@@ -305,7 +305,8 @@ static void subscr_conn_msg_event(struct net *net, int conid,
 	if (subscr_subscribe(net, (struct tipc_subscr *)buf, subscriber, &sub))
 		tipc_conn_terminate(tn->topsrv, subscriber->conid);
 	else
-		tipc_nametbl_subscribe(sub);
+		if (sub)
+			tipc_nametbl_subscribe(sub);
 	spin_unlock_bh(&subscriber->lock);
 }
 

@@ -44,11 +44,23 @@
 #define PSR_I_BIT	0x00000080
 #define PSR_A_BIT	0x00000100
 #define PSR_D_BIT	0x00000200
+#define PSR_PAN_BIT	0x00400000
+#define PSR_UAO_BIT	0x00800000
 #define PSR_Q_BIT	0x08000000
 #define PSR_V_BIT	0x10000000
 #define PSR_C_BIT	0x20000000
 #define PSR_Z_BIT	0x40000000
 #define PSR_N_BIT	0x80000000
+
+/*
+ * pstat in pt_regs and user_pt_regs are 64 bits. The highest 32 bits
+ * of it can be used by kernel. One user of them is signal handler.
+ */
+#define PSR_LINUX_MASK        0xffffffff00000000UL
+#define PSR_LINUX_HW_BP_SS    0x0000000100000000UL    /* Single step and disable breakpoints */
+#define PSR_LINUX_HW_WP_SS    0x0000000200000000UL    /* Single step and disable watchpoints */
+
+#define PSR_LINUX_HW_SS    (PSR_LINUX_HW_BP_SS | PSR_LINUX_HW_WP_SS)
 
 /*
  * Groups of PSR bits
@@ -75,6 +87,7 @@ struct user_fpsimd_state {
 	__uint128_t	vregs[32];
 	__u32		fpsr;
 	__u32		fpcr;
+	__u32		__reserved[2];
 };
 
 struct user_hwdebug_state {

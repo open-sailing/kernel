@@ -19,7 +19,7 @@
 typedef struct {
 	unsigned int id;
 	raw_spinlock_t id_lock;
-	void *vdso;
+	unsigned long vdso;
 } mm_context_t;
 
 #define INIT_MM_CONTEXT(name) \
@@ -28,7 +28,8 @@ typedef struct {
 #define ASID(mm)	((mm)->context.id & 0xffff)
 
 extern void paging_init(void);
-extern void setup_mm_for_reboot(void);
+extern void bootmem_init(void);
+extern void cpu_install_idmap(void);
 extern void __iomem *early_io_map(phys_addr_t phys, unsigned long virt);
 extern void init_mem_pgprot(void);
 extern void create_pgd_mapping(struct mm_struct *mm, phys_addr_t phys,

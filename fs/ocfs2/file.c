@@ -37,6 +37,7 @@
 #include <linux/falloc.h>
 #include <linux/quotaops.h>
 #include <linux/blkdev.h>
+#include <linux/backing-dev.h>
 
 #include <cluster/masklog.h>
 
@@ -1150,7 +1151,7 @@ int ocfs2_setattr(struct dentry *dentry, struct iattr *attr)
 	if (!(attr->ia_valid & OCFS2_VALID_ATTRS))
 		return 0;
 
-	status = inode_change_ok(inode, attr);
+	status = setattr_prepare(dentry, attr);
 	if (status)
 		return status;
 

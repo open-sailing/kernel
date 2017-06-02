@@ -31,6 +31,9 @@
 struct dma_map_ops *dma_ops;
 EXPORT_SYMBOL(dma_ops);
 
+/* defined in arch/arm64/mm/cache.S, export it for driver use */
+EXPORT_SYMBOL(__dma_flush_range);
+
 static pgprot_t __get_dma_pgprot(struct dma_attrs *attrs, pgprot_t prot,
 				 bool coherent)
 {

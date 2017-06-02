@@ -1,0 +1,62 @@
+/**
+ * dts file for Hisilicon PhosphorV660 Lemon 1P Board
+ *
+ * Copyright (C) 2014,2015 Hisilicon Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * publishhed by the Free Software Foundation.
+ *
+ */
+
+/dts-v1/;
+
+/include/ "hip05-2p1s.dtsi"
+/include/ "hip05-lemon-pcie.dtsi"
+
+/ {
+	model = "Hisilicon PhosphorV660 Lemon 1P Development Board";
+	compatible = "hisilicon,hip05-lemon", "hisilicon,hisi-pv660";
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x0 0x0 0x40000000>;
+		numa-node-id = <0>;
+	};
+
+	/include/ "hip05_hns_lemon.dtsi"
+
+	chosen {
+		bootargs = "rdinit=/init earlycon pci=pcie_bus_perf pcie_aspm=off initrd=0x7000000,350M";
+		stdout-path = "serial0:115200n8";
+	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		pwrbutton {
+			label = "Power Button";
+			gpios = <&porta 8 1>;
+			linux,code = <116>;
+			debounce-interval = <0>;
+		};
+	};
+
+
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&m3_i2c1 {
+	clock-frequency = <100000>;
+	status = "okay";
+
+	rtc: ds3231@68 {
+		compatible = "maxim,ds3231";
+		reg = <0x68>;
+	};
+};

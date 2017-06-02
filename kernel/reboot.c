@@ -308,8 +308,12 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
 	/* Instead of trying to make the power_off code look like
 	 * halt when pm_power_off is not set do it the easy way.
 	 */
-	if ((cmd == LINUX_REBOOT_CMD_POWER_OFF) && !pm_power_off)
-		cmd = LINUX_REBOOT_CMD_HALT;
+	if ((cmd == LINUX_REBOOT_CMD_POWER_OFF) && !pm_power_off) {
+		if (microvm)
+			cmd = LINUX_REBOOT_CMD_RESTART;
+		else
+			cmd = LINUX_REBOOT_CMD_HALT;
+	}
 
 	mutex_lock(&reboot_mutex);
 	switch (cmd) {
@@ -326,7 +330,10 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
 		break;
 
 	case LINUX_REBOOT_CMD_HALT:
-		kernel_halt();
+		if (microvm)
+			kernel_restart(NULL);
+		else
+			kernel_halt();
 		do_exit(0);
 		panic("cannot halt");
 

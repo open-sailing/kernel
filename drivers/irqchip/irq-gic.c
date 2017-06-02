@@ -88,6 +88,8 @@ static u8 gic_cpu_map[NR_GIC_CPU_IF] __read_mostly;
 
 static struct gic_chip_data gic_data[MAX_GIC_NR] __read_mostly;
 
+static struct gic_kvm_info gic_v2_kvm_info;
+
 #ifdef CONFIG_GIC_NON_BANKED
 static void __iomem *gic_get_percpu_base(union gic_base *base)
 {
@@ -1003,6 +1005,29 @@ void __init gic_init_bases(unsigned int gic_nr, int irq_start,
 #ifdef CONFIG_OF
 static int gic_cnt __initdata;
 
+static void __init gic_of_setup_kvm_info(struct device_node *node)
+{
+	int ret;
+	struct resource *vctrl_res = &gic_v2_kvm_info.vctrl;
+	struct resource *vcpu_res = &gic_v2_kvm_info.vcpu;
+
+	gic_v2_kvm_info.type = GIC_V2;
+
+	gic_v2_kvm_info.maint_irq = irq_of_parse_and_map(node, 0);
+	if (!gic_v2_kvm_info.maint_irq)
+		return;
+
+	ret = of_address_to_resource(node, 2, vctrl_res);
+	if (ret)
+		return;
+
+	ret = of_address_to_resource(node, 3, vcpu_res);
+	if (ret)
+		return;
+
+	gic_set_kvm_info(&gic_v2_kvm_info);
+}
+
 static int __init
 gic_of_init(struct device_node *node, struct device_node *parent)
 {
@@ -1024,8 +1049,10 @@ gic_of_init(struct device_node *node, struct device_node *parent)
 		percpu_offset = 0;
 
 	gic_init_bases(gic_cnt, -1, dist_base, cpu_base, percpu_offset, node);
-	if (!gic_cnt)
+	if (!gic_cnt) {
 		gic_init_physaddr(node);
+		gic_of_setup_kvm_info(node);
+	}
 
 	if (parent) {
 		irq = irq_of_parse_and_map(node, 0);
@@ -1147,6 +1174,7 @@ gic_v2_acpi_init(struct acpi_table_header *table)
 	irq_set_default_host(gic_data[0].domain);
 
 	acpi_irq_model = ACPI_IRQ_MODEL_GIC;
+
 	return 0;
 }
 #endif

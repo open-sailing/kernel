@@ -13,6 +13,7 @@
 #include <linux/pagemap.h>
 #include <linux/mempool.h>
 #include <linux/blkdev.h>
+#include <linux/backing-dev.h>
 #include <linux/init.h>
 #include <linux/hash.h>
 #include <linux/highmem.h>
@@ -128,9 +129,6 @@ static void bounce_end_io(struct bio *bio, mempool_t *pool, int err)
 	struct bio_vec *bvec, *org_vec;
 	int i;
 
-	if (test_bit(BIO_EOPNOTSUPP, &bio->bi_flags))
-		set_bit(BIO_EOPNOTSUPP, &bio_orig->bi_flags);
-
 	/*
 	 * free up bounce indirect pages used
 	 */
@@ -184,7 +182,7 @@ static int must_snapshot_stable_pages(struct request_queue *q, struct bio *bio)
 	if (bio_data_dir(bio) != WRITE)
 		return 0;
 
-	if (!bdi_cap_stable_pages_required(&q->backing_dev_info))
+	if (!bdi_cap_stable_pages_required(q->backing_dev_info))
 		return 0;
 
 	return test_bit(BIO_SNAP_STABLE, &bio->bi_flags);

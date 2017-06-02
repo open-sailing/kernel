@@ -1,0 +1,227 @@
+pcie@0xa00a0000 {
+	compatible = "hisilicon,hip06-pcie", "snps,dw-pcie";
+	reg = <0 0xa00a0000 0 0x10000>, <0 0xa0000000 0 0x10000>,
+		  <0 0xa00e0000 0 0x10000>, <0x0 0xadfe0000 0 0x10000>;
+	reg-names = "rc_dbi", "subctrl", "pcs", "config";
+	bus-range = <0 31>;
+	msi-parent = <&p0_its_dsa_a>;
+	interrupt-parent = <&p0_mbigen_pcie_a>;
+	interrupts = <0x40087 10 91 5>;
+	interrupt-names = "aer";
+	#interrupt-cells = <1>;
+	interrupt-map-mask = <0xf800 0 0 7>;
+	interrupt-map = <0x0 0 0 1 &p0_mbigen_pcie_a 0x40087 10 95 5
+			0x0 0 0 2 &p0_mbigen_pcie_a 0x40087 10 95 5
+			0x0 0 0 3 &p0_mbigen_pcie_a 0x40087 10 95 5
+			0x0 0 0 4 &p0_mbigen_pcie_a 0x40087 10 95 5>;
+	#address-cells = <3>;
+	#size-cells = <2>;
+	device_type = "pci";
+	dma-coherent;
+	ranges = <0x02000000 0 0xac000000 0x0 0xac000000 0 0x1fe0000
+		  0x01000000 0 0 0 0xadff0000 0 0x10000>;
+	num-lanes = <8>;
+	port-id = <2>;
+	linux,pci-domain = <0>;
+	status = "ok";
+};
+
+pcie@0x8a0090000 {
+	compatible = "hisilicon,hip06-pcie", "snps,dw-pcie";
+	reg = <0x8 0xa0090000 0 0x10000>, <0x8 0xa0000000 0 0x10000>,
+		  <0x8 0xa00c0000 0 0x10000>, <0x8 0xa9fe0000 0 0x10000>;
+	reg-names = "rc_dbi", "subctrl", "pcs", "config";
+	bus-range = <32  63>;
+	msi-parent = <&p0_its_dsa_b>;
+	interrupt-parent = <&p0_mbigen_pcie_b>;
+	interrupts = <0x42085 10 70 5>;
+	interrupt-names = "aer";
+	#interrupt-cells = <1>;
+	interrupt-map-mask = <0xf800 0 0 7>;
+	interrupt-map = <0x0 0 0 1 &p0_mbigen_pcie_b 0x42085 10 74 5
+			0x0 0 0 2 &p0_mbigen_pcie_b 0x42085 10 74 5
+			0x0 0 0 3 &p0_mbigen_pcie_b 0x42085 10 74 5
+			0x0 0 0 4 &p0_mbigen_pcie_b 0x42085 10 74 5>;
+	bar2_size = <0 0x400000>;
+	bar4_size = <0 0x400000>;
+	#address-cells = <3>;
+	#size-cells = <2>;
+	device_type = "pci";
+	dma-coherent;
+	ranges = <0x02000000 0 0xa8000000 0x8 0xa8000000 0 0x1fe0000
+	          0x01000000 0 0 0x8 0xa9ff0000 0 0x10000>;
+	num-lanes = <8>;
+	port-id = <0>;
+	linux,pci-domain = <0>;
+	status = "ok";
+};
+
+pcie@0x8a0200000 {
+	compatible = "hisilicon,hip06-pcie", "snps,dw-pcie";
+	reg = <0x8 0xa0200000 0 0x10000>, <0x8 0xa0000000 0 0x10000>,
+		  <0x8 0xa00d0000 0 0x10000>, <0x8 0xabfe0000 0 0x10000>;
+	reg-names = "rc_dbi", "subctrl", "pcs", "config";
+	bus-range = <64 95>;
+	msi-parent = <&p0_its_dsa_b>;
+	interrupt-parent = <&p0_mbigen_pcie_b>;
+	interrupts = <0x42086 11 80 5>;
+	interrupt-names = "aer";
+	#interrupt-cells = <1>;
+	interrupt-map-mask = <0xf800 0 0 7>;
+	interrupt-map = <0x0 0 0 1 &p0_mbigen_pcie_b 0x42086 11 85 5
+			0x0 0 0 2 &p0_mbigen_pcie_b 0x42086 11 85 5
+			0x0 0 0 3 &p0_mbigen_pcie_b 0x42086 11 85 5
+			0x0 0 0 4 &p0_mbigen_pcie_b 0x42086 11 85 5>;
+	#address-cells = <3>;
+	#size-cells = <2>;
+	device_type = "pci";
+	dma-coherent;
+	ranges = <0x02000000 0 0xaa000000 0x8 0xaa000000 0 0x1fe0000
+	          0x01000000 0 0 0x8 0xabff0000 0 0x10000>;
+	num-lanes = <8>;
+	port-id = <1>;
+	linux,pci-domain = <0>;
+	status = "ok";
+};
+
+pcie@0x8a00a0000 {
+	compatible = "hisilicon,hip06-pcie", "snps,dw-pcie";
+	reg = <0x8 0xa00a0000 0 0x10000>, <0x8 0xa0000000 0 0x10000>,
+		  <0x8 0xa00e0000 0 0x10000>, <0x8 0xadfe0000 0 0x10000>;
+	reg-names = "rc_dbi", "subctrl", "pcs", "config";
+	bus-range = <96 127>;
+	msi-parent = <&p0_its_dsa_b>;
+	interrupt-parent = <&p0_mbigen_pcie_b>;
+	interrupts = <0x42087 10 91 5>;
+	interrupt-names = "aer";
+	#interrupt-cells = <1>;
+	interrupt-map-mask = <0xf800 0 0 7>;
+	interrupt-map = <0x0 0 0 1 &p0_mbigen_pcie_b 0x42087 10 94 5
+			0x0 0 0 2 &p0_mbigen_pcie_b 0x42087 10 94 5
+			0x0 0 0 3 &p0_mbigen_pcie_b 0x42087 10 94 5
+			0x0 0 0 4 &p0_mbigen_pcie_b 0x42087 10 94 5>;
+	#address-cells = <3>;
+	#size-cells = <2>;
+	device_type = "pci";
+	dma-coherent;
+	ranges = <0x02000000 0 0xac000000 0x8 0xac000000 0 0x1fe0000
+	          0x01000000 0 0 0x8 0xadff0000 0 0x10000>;
+	num-lanes = <1>;
+	port-id = <2>;
+	linux,pci-domain = <0>;
+	status = "disable";
+};
+
+pcie@0x8a00b0000 {
+	compatible = "hisilicon,hip06-pcie", "snps,dw-pcie";
+	reg = <0x8 0xa00b0000 0 0x10000>, <0x8 0xa0000000 0 0x10000>,
+		  <0x8 0xa00f0000 0 0x10000>, <0x8 0xaffe0000 0 0x10000>;
+	reg-names = "rc_dbi", "subctrl", "pcs", "config";
+	bus-range = <128 159>;
+	msi-parent = <&p0_its_dsa_b>;
+	interrupt-parent = <&p0_mbigen_pcie_b>;
+	interrupts = <0x42088 10 101 5>;
+	interrupt-names = "aer";
+	#interrupt-cells = <1>;
+	interrupt-map-mask = <0xf800 0 0 7>;
+	interrupt-map = <0x0 0 0 1 &p0_mbigen_pcie_b 0x42088 10 105 5
+			0x0 0 0 2 &p0_mbigen_pcie_b 0x42088 10 105 5
+			0x0 0 0 3 &p0_mbigen_pcie_b 0x42088 10 105 5
+			0x0 0 0 4 &p0_mbigen_pcie_b 0x42088 10 105 5>;
+	#address-cells = <3>;
+	#size-cells = <2>;
+	device_type = "pci";
+	dma-coherent;
+	ranges = <0x02000000 0 0xae000000 0x8 0xae000000 0 0x1fe0000
+	         0x01000000 0 0 0x8 0xafff0000 0 0x10000>;
+	num-lanes = <1>;
+	port-id = <3>;
+	linux,pci-domain = <0>;
+	status = "disable";
+};
+
+pcie@0x400a00a0000 {
+	compatible = "hisilicon,hip06-pcie", "snps,dw-pcie";
+	reg = <0x400 0xa00a0000 0 0x10000>, <0x400 0xa0000000 0 0x10000>,
+		  <0x400 0xa00e0000 0 0x10000>, <0x400 0xadfe0000 0 0x10000>;
+	reg-names = "rc_dbi", "subctrl", "pcs", "config";
+	bus-range = <160 191>;
+	msi-parent = <&p1_its_dsa_a>;
+	interrupt-parent = <&p1_mbigen_pcie_a>;
+	interrupts = <0x44087 10 91 5>;
+	interrupt-names = "aer";
+	#interrupt-cells = <1>;
+	interrupt-map-mask = <0xf800 0 0 7>;
+	interrupt-map = <0x0 0 0 1 &p1_mbigen_pcie_a 0x44087 10 95 5
+			0x0 0 0 2 &p1_mbigen_pcie_a 0x44087 10 95 5
+			0x0 0 0 3 &p1_mbigen_pcie_a 0x44087 10 95 5
+			0x0 0 0 4 &p1_mbigen_pcie_a 0x44087 10 95 5>;
+	#address-cells = <3>;
+	#size-cells = <2>;
+	device_type = "pci";
+	dma-coherent;
+	ranges = <0x02000000 0 0xac000000 0x400 0xac000000 0 0x1fe0000
+		  0x01000000 0 0 0x400 0xadff0000 0 0x10000>;
+	num-lanes = <8>;
+	port-id = <2>;
+	linux,pci-domain = <0>;
+	status = "disable";
+};
+
+pcie@0x408a0090000 {
+	compatible = "hisilicon,hip06-pcie", "snps,dw-pcie";
+	reg = <0x408 0xa0090000 0 0x10000>, <0x408 0xa0000000 0 0x10000>,
+		  <0x408 0xa00c0000 0 0x10000>, <0x408 0xa9fe0000 0 0x10000>;
+	reg-names = "rc_dbi", "subctrl", "pcs", "config";
+	bus-range = <192  223>;
+	msi-parent = <&p1_its_dsa_b>;
+	#interrupt-cells = <1>;
+	interrupt-parent = <&p1_mbigen_pcie_b>;
+	interrupts = <0x46085 10 70 5>;
+	interrupt-names = "aer";
+	interrupt-map-mask = <0xf800 0 0 7>;
+	interrupt-map = <0x0 0 0 1 &p1_mbigen_pcie_b 0x46085 10 74 5
+			0x0 0 0 2 &p1_mbigen_pcie_b 0x46085 10 74 5
+			0x0 0 0 3 &p1_mbigen_pcie_b 0x46085 10 74 5
+			0x0 0 0 4 &p1_mbigen_pcie_b 0x46085 10 74 5>;
+	bar2_size = <0 0x400000>;
+	bar4_size = <0 0x400000>;
+	#address-cells = <3>;
+	#size-cells = <2>;
+	device_type = "pci";
+	dma-coherent;
+	ranges = <0x02000000 0 0xa8000000 0x408 0xa8000000 0 0x1fe0000
+	           0x01000000 0 0 0x408 0xa9ff0000 0 0x10000>;
+	num-lanes = <8>;
+	port-id = <0>;
+	linux,pci-domain = <0>;
+	status = "ok";
+};
+
+pcie@0x408a0200000 {
+	compatible = "hisilicon,hip06-pcie", "snps,dw-pcie";
+	reg = <0x408 0xa0200000 0 0x10000>, <0x408 0xa0000000 0 0x10000>,
+		  <0x408 0xa00d0000 0 0x10000>, <0x408 0xabfe0000 0 0x10000>;
+	reg-names = "rc_dbi", "subctrl", "pcs", "config";
+	bus-range = <224 255>;
+	msi-parent = <&p1_its_dsa_b>;
+	interrupt-parent = <&p1_mbigen_pcie_b>;
+	interrupts = <0x46086 11 80 5>;
+	interrupt-names = "aer";
+	#interrupt-cells = <1>;
+	interrupt-map-mask = <0xf800 0 0 7>;
+	interrupt-map = <0x0 0 0 1 &p1_mbigen_pcie_b 0x46086 11 85 5
+			0x0 0 0 2 &p1_mbigen_pcie_b 0x46086 11 85 5
+			0x0 0 0 3 &p1_mbigen_pcie_b 0x46086 11 85 5
+			0x0 0 0 4 &p1_mbigen_pcie_b 0x46086 11 85 5>;
+	#address-cells = <3>;
+	#size-cells = <2>;
+	device_type = "pci";
+	dma-coherent;
+	ranges = <0x02000000 0 0xaa000000 0x408 0xaa000000 0 0x1fe0000
+	          0x01000000 0 0 0x408 0xabff0000 0 0x10000>;
+	num-lanes = <8>;
+	port-id = <1>;
+	linux,pci-domain = <0>;
+	status = "ok";
+};

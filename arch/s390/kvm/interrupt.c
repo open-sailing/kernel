@@ -168,20 +168,20 @@ static unsigned long deliverable_irqs(struct kvm_vcpu *vcpu)
 
 static void __set_cpu_idle(struct kvm_vcpu *vcpu)
 {
-	atomic_set_mask(CPUSTAT_WAIT, &vcpu->arch.sie_block->cpuflags);
+	atomic_or(CPUSTAT_WAIT, &vcpu->arch.sie_block->cpuflags);
 	set_bit(vcpu->vcpu_id, vcpu->arch.local_int.float_int->idle_mask);
 }
 
 static void __unset_cpu_idle(struct kvm_vcpu *vcpu)
 {
-	atomic_clear_mask(CPUSTAT_WAIT, &vcpu->arch.sie_block->cpuflags);
+	atomic_andnot(CPUSTAT_WAIT, &vcpu->arch.sie_block->cpuflags);
 	clear_bit(vcpu->vcpu_id, vcpu->arch.local_int.float_int->idle_mask);
 }
 
 static void __reset_intercept_indicators(struct kvm_vcpu *vcpu)
 {
-	atomic_clear_mask(CPUSTAT_IO_INT | CPUSTAT_EXT_INT | CPUSTAT_STOP_INT,
-			  &vcpu->arch.sie_block->cpuflags);
+	atomic_andnot(CPUSTAT_IO_INT | CPUSTAT_EXT_INT | CPUSTAT_STOP_INT,
+		    &vcpu->arch.sie_block->cpuflags);
 	vcpu->arch.sie_block->lctl = 0x0000;
 	vcpu->arch.sie_block->ictl &= ~(ICTL_LPSW | ICTL_STCTL | ICTL_PINT);
 
@@ -194,7 +194,7 @@ static void __reset_intercept_indicators(struct kvm_vcpu *vcpu)
 
 static void __set_cpuflag(struct kvm_vcpu *vcpu, u32 flag)
 {
-	atomic_set_mask(flag, &vcpu->arch.sie_block->cpuflags);
+	atomic_or(flag, &vcpu->arch.sie_block->cpuflags);
 }
 
 static void set_intercept_indicators_io(struct kvm_vcpu *vcpu)
@@ -875,13 +875,13 @@ no_timer:
 
 void kvm_s390_vcpu_wakeup(struct kvm_vcpu *vcpu)
 {
-	if (waitqueue_active(&vcpu->wq)) {
+	if (swait_active(&vcpu->wq)) {
 		/*
 		 * The vcpu gave up the cpu voluntarily, mark it as a good
 		 * yield-candidate.
 		 */
 		vcpu->preempted = true;
-		wake_up_interruptible(&vcpu->wq);
+		swake_up(&vcpu->wq);
 		vcpu->stat.halt_wakeup++;
 	}
 }
@@ -917,7 +917,7 @@ void kvm_s390_clear_local_irqs(struct kvm_vcpu *vcpu)
 	spin_unlock(&li->lock);
 
 	/* clear pending external calls set by sigp interpretation facility */
-	atomic_clear_mask(CPUSTAT_ECALL_PEND, li->cpuflags);
+	atomic_andnot(CPUSTAT_ECALL_PEND, li->cpuflags);
 	vcpu->kvm->arch.sca->cpu[vcpu->vcpu_id].sigp_ctrl = 0;
 }
 
@@ -1023,7 +1023,7 @@ static int __inject_pfault_init(struct kvm_vcpu *vcpu, struct kvm_s390_irq *irq)
 
 	li->irq.ext = irq->u.ext;
 	set_bit(IRQ_PEND_PFAULT_INIT, &li->pending_irqs);
-	atomic_set_mask(CPUSTAT_EXT_INT, li->cpuflags);
+	atomic_or(CPUSTAT_EXT_INT, li->cpuflags);
 	return 0;
 }
 
@@ -1038,7 +1038,7 @@ static int __inject_extcall_sigpif(struct kvm_vcpu *vcpu, uint16_t src_id)
 		/* another external call is pending */
 		return -EBUSY;
 	}
-	atomic_set_mask(CPUSTAT_ECALL_PEND, &vcpu->arch.sie_block->cpuflags);
+	atomic_or(CPUSTAT_ECALL_PEND, &vcpu->arch.sie_block->cpuflags);
 	return 0;
 }
 
@@ -1063,7 +1063,7 @@ static int __inject_extcall(struct kvm_vcpu *vcpu, struct kvm_s390_irq *irq)
 	if (test_and_set_bit(IRQ_PEND_EXT_EXTERNAL, &li->pending_irqs))
 		return -EBUSY;
 	*extcall = irq->u.extcall;
-	atomic_set_mask(CPUSTAT_EXT_INT, li->cpuflags);
+	atomic_or(CPUSTAT_EXT_INT, li->cpuflags);
 	return 0;
 }
 
@@ -1139,7 +1139,7 @@ static int __inject_sigp_emergency(struct kvm_vcpu *vcpu,
 
 	set_bit(irq->u.emerg.code, li->sigp_emerg_pending);
 	set_bit(IRQ_PEND_EXT_EMERGENCY, &li->pending_irqs);
-	atomic_set_mask(CPUSTAT_EXT_INT, li->cpuflags);
+	atomic_or(CPUSTAT_EXT_INT, li->cpuflags);
 	return 0;
 }
 
@@ -1183,7 +1183,7 @@ static int __inject_ckc(struct kvm_vcpu *vcpu)
 				   0, 0, 2);
 
 	set_bit(IRQ_PEND_EXT_CLOCK_COMP, &li->pending_irqs);
-	atomic_set_mask(CPUSTAT_EXT_INT, li->cpuflags);
+	atomic_or(CPUSTAT_EXT_INT, li->cpuflags);
 	return 0;
 }
 
@@ -1196,7 +1196,7 @@ static int __inject_cpu_timer(struct kvm_vcpu *vcpu)
 				   0, 0, 2);
 
 	set_bit(IRQ_PEND_EXT_CPU_TIMER, &li->pending_irqs);
-	atomic_set_mask(CPUSTAT_EXT_INT, li->cpuflags);
+	atomic_or(CPUSTAT_EXT_INT, li->cpuflags);
 	return 0;
 }
 
@@ -1389,13 +1389,13 @@ static int __inject_vm(struct kvm *kvm, struct kvm_s390_interrupt_info *inti)
 	spin_lock(&li->lock);
 	switch (type) {
 	case KVM_S390_MCHK:
-		atomic_set_mask(CPUSTAT_STOP_INT, li->cpuflags);
+		atomic_or(CPUSTAT_STOP_INT, li->cpuflags);
 		break;
 	case KVM_S390_INT_IO_MIN...KVM_S390_INT_IO_MAX:
-		atomic_set_mask(CPUSTAT_IO_INT, li->cpuflags);
+		atomic_or(CPUSTAT_IO_INT, li->cpuflags);
 		break;
 	default:
-		atomic_set_mask(CPUSTAT_EXT_INT, li->cpuflags);
+		atomic_or(CPUSTAT_EXT_INT, li->cpuflags);
 		break;
 	}
 	spin_unlock(&li->lock);
@@ -2102,7 +2102,8 @@ static int set_adapter_int(struct kvm_kernel_irq_routing_entry *e,
 	return ret;
 }
 
-int kvm_set_routing_entry(struct kvm_kernel_irq_routing_entry *e,
+int kvm_set_routing_entry(struct kvm *kvm,
+			  struct kvm_kernel_irq_routing_entry *e,
 			  const struct kvm_irq_routing_entry *ue)
 {
 	int ret;

@@ -139,9 +139,11 @@ int ext4_generate_encryption_key(struct inode *inode)
 		goto out;
 	}
 	BUG_ON(keyring_key->type != &key_type_logon);
+	down_read(&keyring_key->sem);
 	ukp = ((struct user_key_payload *)keyring_key->payload.data);
 	if (ukp->datalen != sizeof(struct ext4_encryption_key)) {
 		res = -EINVAL;
+		up_read(&keyring_key->sem);
 		goto out;
 	}
 	master_key = (struct ext4_encryption_key *)ukp->data;
@@ -149,6 +151,7 @@ int ext4_generate_encryption_key(struct inode *inode)
 		     EXT4_KEY_DERIVATION_NONCE_SIZE);
 	BUG_ON(master_key->size != EXT4_AES_256_XTS_KEY_SIZE);
 	res = ext4_derive_key_aes(ctx.nonce, master_key->raw, crypt_key->raw);
+	up_read(&keyring_key->sem);
 out:
 	if (keyring_key)
 		key_put(keyring_key);

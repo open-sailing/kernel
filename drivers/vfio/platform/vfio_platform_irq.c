@@ -185,6 +185,8 @@ static int vfio_set_trigger(struct vfio_platform_device *vdev, int index,
 	int ret;
 
 	if (irq->trigger) {
+		if (irq->flags & VFIO_IRQ_INFO_AUTOMASKED)
+			irq_clear_status_flags(irq->hwirq, IRQ_NOAUTOEN);
 		free_irq(irq->hwirq, irq);
 		kfree(irq->name);
 		eventfd_ctx_put(irq->trigger);
@@ -207,7 +209,10 @@ static int vfio_set_trigger(struct vfio_platform_device *vdev, int index,
 
 	irq->trigger = trigger;
 
-	irq_set_status_flags(irq->hwirq, IRQ_NOAUTOEN);
+	/* disable AUTOEN if it is AUTOMASKED interrupt */
+	if (irq->flags & VFIO_IRQ_INFO_AUTOMASKED)
+		irq_set_status_flags(irq->hwirq, IRQ_NOAUTOEN);
+
 	ret = request_irq(irq->hwirq, handler, 0, irq->name, irq);
 	if (ret) {
 		kfree(irq->name);
@@ -216,7 +221,7 @@ static int vfio_set_trigger(struct vfio_platform_device *vdev, int index,
 		return ret;
 	}
 
-	if (!irq->masked)
+	if ((irq->flags & VFIO_IRQ_INFO_AUTOMASKED) && (!irq->masked))
 		enable_irq(irq->hwirq);
 
 	return 0;

@@ -665,7 +665,6 @@ static int __hpp__slsmg_color_printf(struct perf_hpp *hpp, const char *fmt, ...)
 	ret = scnprintf(hpp->buf, hpp->size, fmt, len, percent);
 	slsmg_printf("%s", hpp->buf);
 
-	advance_hpp(hpp, ret);
 	return ret;
 }
 

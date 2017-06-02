@@ -305,23 +305,27 @@ static void scsi_init_cmd_errh(struct scsi_cmnd *cmd)
 		cmd->cmd_len = scsi_command_size(cmd->cmnd);
 }
 
+static void __scsi_eh_wakeup(struct Scsi_Host *shost)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(shost->host_lock, flags);
+	if (unlikely(scsi_host_in_recovery(shost) &&
+		     (shost->host_failed || shost->host_eh_scheduled)))
+		scsi_eh_wakeup(shost);
+	spin_unlock_irqrestore(shost->host_lock, flags);
+}
+
 void scsi_device_unbusy(struct scsi_device *sdev)
 {
 	struct Scsi_Host *shost = sdev->host;
 	struct scsi_target *starget = scsi_target(sdev);
-	unsigned long flags;
 
 	atomic_dec(&shost->host_busy);
 	if (starget->can_queue > 0)
 		atomic_dec(&starget->target_busy);
 
-	if (unlikely(scsi_host_in_recovery(shost) &&
-		     (shost->host_failed || shost->host_eh_scheduled))) {
-		spin_lock_irqsave(shost->host_lock, flags);
-		scsi_eh_wakeup(shost);
-		spin_unlock_irqrestore(shost->host_lock, flags);
-	}
-
+	__scsi_eh_wakeup(shost);
 	atomic_dec(&sdev->device_busy);
 }
 
@@ -1301,8 +1305,9 @@ scsi_prep_state_check(struct scsi_device *sdev, struct request *req)
 			 * commands.  The device must be brought online
 			 * before trying any recovery commands.
 			 */
-			sdev_printk(KERN_ERR, sdev,
-				    "rejecting I/O to offline device\n");
+			if (printk_ratelimit())
+				sdev_printk(KERN_ERR, sdev,
+					    "rejecting I/O to offline device\n");
 			ret = BLKPREP_KILL;
 			break;
 		case SDEV_DEL:
@@ -1310,8 +1315,9 @@ scsi_prep_state_check(struct scsi_device *sdev, struct request *req)
 			 * If the device is fully deleted, we refuse to
 			 * process any commands as well.
 			 */
-			sdev_printk(KERN_ERR, sdev,
-				    "rejecting I/O to dead device\n");
+			if (printk_ratelimit())
+				sdev_printk(KERN_ERR, sdev,
+					    "rejecting I/O to dead device\n");
 			ret = BLKPREP_KILL;
 			break;
 		case SDEV_BLOCK:
@@ -1544,6 +1550,7 @@ starved:
 	spin_unlock_irq(shost->host_lock);
 out_dec:
 	atomic_dec(&shost->host_busy);
+	__scsi_eh_wakeup(shost);
 	return 0;
 }
 
@@ -1789,8 +1796,9 @@ static void scsi_request_fn(struct request_queue *q)
 			break;
 
 		if (unlikely(!scsi_device_online(sdev))) {
-			sdev_printk(KERN_ERR, sdev,
-				    "rejecting I/O to offline device\n");
+			if (printk_ratelimit())
+				sdev_printk(KERN_ERR, sdev,
+					    "rejecting I/O to offline device\n");
 			scsi_kill_request(req, q);
 			continue;
 		}
@@ -2018,6 +2026,7 @@ static int scsi_queue_rq(struct blk_mq_hw_ctx *hctx,
 
 out_dec_host_busy:
 	atomic_dec(&shost->host_busy);
+	__scsi_eh_wakeup(shost);
 out_dec_target_busy:
 	if (scsi_target(sdev)->can_queue > 0)
 		atomic_dec(&scsi_target(sdev)->target_busy);
@@ -3008,7 +3017,8 @@ scsi_internal_device_unblock(struct scsi_device *sdev,
 		else
 			sdev->sdev_state = SDEV_CREATED;
 	} else if (sdev->sdev_state != SDEV_CANCEL &&
-		 sdev->sdev_state != SDEV_OFFLINE)
+		 sdev->sdev_state != SDEV_OFFLINE &&
+		 sdev->sdev_state != SDEV_RUNNING)
 		return -EINVAL;
 
 	if (q->mq_ops) {

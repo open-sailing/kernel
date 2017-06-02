@@ -162,6 +162,14 @@ struct disk_part_tbl {
 
 struct disk_events;
 
+struct disk_devt {
+	atomic_t count;
+	void (*release)(struct disk_devt *disk_devt);
+};
+
+void put_disk_devt(struct disk_devt *disk_devt);
+void get_disk_devt(struct disk_devt *disk_devt);
+
 struct gendisk {
 	/* major, first_minor and minors are input parameters only,
 	 * don't use directly.  Use disk_devt() and disk_max_parts().
@@ -170,6 +178,7 @@ struct gendisk {
 	int first_minor;
 	int minors;                     /* maximum number of minors, =1 for
                                          * disks that can't be partitioned. */
+	struct disk_devt *disk_devt;
 
 	char disk_name[DISK_NAME_LEN];	/* name of major driver */
 	char *(*devnode)(struct gendisk *gd, umode_t *mode);
