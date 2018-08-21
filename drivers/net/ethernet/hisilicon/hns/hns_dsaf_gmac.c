@@ -272,6 +272,11 @@ static int hns_gmac_adjust_link(void *mac_drv, enum mac_speed speed,
 {
 	struct mac_driver *drv = (struct mac_driver *)mac_drv;
 
+	if (full_duplex == DUPLEX_HALF && speed == MAC_SPEED_1000) {
+		dev_err(drv->dev, "HW do not support 1000M half\n");
+		return -EINVAL;
+	}
+
 	dsaf_set_dev_bit(drv, GMAC_DUPLEX_TYPE_REG,
 			 GMAC_DUPLEX_TYPE_B, !!full_duplex);
 
